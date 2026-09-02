@@ -14,6 +14,10 @@ app.get('/ping', (req, res) => {
   res.json({ message: 'API do PlanejEasy rodando com sucesso! 🚀' });
 });
 
+// ==========================================
+// ROTAS DE DISCIPLINAS
+// ==========================================
+
 app.get('/disciplinas', async (req, res) => {
   try {
     const { data, error } = await supabase.from('disciplinas').select('*');
@@ -28,7 +32,7 @@ app.get('/disciplinas', async (req, res) => {
   }
 });
 
-// NOVA ROTA: Cadastrar uma disciplina
+// Cadastrar uma disciplina
 app.post('/disciplinas', async (req, res) => {
   try {
     const { nome } = req.body;
@@ -42,6 +46,70 @@ app.post('/disciplinas', async (req, res) => {
       return res.status(400).json({ erro: error.message });
     }
 
+    return res.status(201).json(data);
+  } catch (err) {
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
+// ==========================================
+// ROTAS DE PROFESSORES
+// ==========================================
+
+// Listar todos os professores
+app.get('/professores', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('professores').select('*');
+    if (error) return res.status(400).json({ erro: error.message });
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
+// Cadastrar um professor
+app.post('/professores', async (req, res) => {
+  try {
+    const { nome, email, senha_hash } = req.body;
+
+    const { data, error } = await supabase
+      .from('professores')
+      .insert([{ nome, email, senha_hash }])
+      .select();
+
+    if (error) return res.status(400).json({ erro: error.message });
+    return res.status(201).json(data);
+  } catch (err) {
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
+// ==========================================
+// ROTAS DE TURMAS
+// ==========================================
+
+// Listar todas as turmas
+app.get('/turmas', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('turmas').select('*');
+    if (error) return res.status(400).json({ erro: error.message });
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
+// Cadastrar uma nova turma vinculada a um professor
+app.post('/turmas', async (req, res) => {
+  try {
+    const { nome, turno, professor_id } = req.body;
+
+    const { data, error } = await supabase
+      .from('turmas')
+      .insert([{ nome, turno, professor_id }])
+      .select();
+
+    if (error) return res.status(400).json({ erro: error.message });
     return res.status(201).json(data);
   } catch (err) {
     return res.status(500).json({ erro: 'Erro interno no servidor' });
