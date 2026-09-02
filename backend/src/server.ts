@@ -116,6 +116,64 @@ app.post('/turmas', async (req, res) => {
   }
 });
 
+// ==========================================
+// ROTAS DE PLANOS DE AULA
+// ==========================================
+
+// Listar todos os planos de aula
+app.get('/planos', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('planos_de_aula').select('*');
+    if (error) return res.status(400).json({ erro: error.message });
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
+// Cadastrar um novo plano de aula
+app.post('/planos', async (req, res) => {
+  try {
+    const {
+      professor_id,
+      turma_id,
+      disciplina_id,
+      quinzena,
+      ordem_aula,
+      dia_semana,
+      objeto_conhecimento,
+      habilidade_bncc,
+      estrategia_inicio,
+      estrategia_desenvolvimento,
+      estrategia_fim,
+      localizacao_materiais
+    } = req.body;
+
+    const { data, error } = await supabase
+      .from('planos_de_aula')
+      .insert([{
+        professor_id,
+        turma_id,
+        disciplina_id,
+        quinzena,
+        ordem_aula,
+        dia_semana,
+        objeto_conhecimento,
+        habilidade_bncc,
+        estrategia_inicio,
+        estrategia_desenvolvimento,
+        estrategia_fim,
+        localizacao_materiais
+      }])
+      .select();
+
+    if (error) return res.status(400).json({ erro: error.message });
+    return res.status(201).json(data);
+  } catch (err) {
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
 const PORT = process.env.PORT || 3333;
 
 app.listen(PORT, () => {
