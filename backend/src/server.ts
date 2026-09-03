@@ -174,6 +174,22 @@ app.post('/planos', async (req, res) => {
   }
 });
 
+// Rota para buscar os objetos da BNCC
+app.get('/bncc', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('objetos_bncc')
+      .select('*');
+
+    if (error) {
+      return res.status(400).json({ erro: error.message });
+    }
+
+    return res.json(data);
+  } catch (error) {
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
 const PORT = process.env.PORT || 3333;
 
 app.listen(PORT, () => {

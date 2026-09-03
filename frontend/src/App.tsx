@@ -1,25 +1,38 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import FormularioPlanoAula from './components/FormularioPlanoAula';
 
-interface Disciplina {
-  id: number;
-  nome: string;
-}
+interface Disciplina { id: number; nome: string; }
+interface Turma { id: number; nome: string; }
+
+interface ObjetoBncc { id: number; codigo: string; descricao: string; disciplina_id: number; }
 
 export default function App() {
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
 
+  const [bncc, setBncc] = useState<ObjetoBncc[]>([]);
   const [novaDisciplina, setNovaDisciplina] = useState(''); 
 
   useEffect(() => {
     fetch('http://localhost:3333/disciplinas')
-      .then((resposta) => resposta.json())
-      .then((dados) => setDisciplinas(dados))
-      .catch((erro) => console.error("Erro ao buscar disciplinas:", erro));
+      .then(res => res.json())
+      .then(dados => setDisciplinas(dados))
+      .catch(erro => console.error("Erro em disciplinas:", erro));
+
+    fetch('http://localhost:3333/turmas')
+      .then(res => res.json())
+      .then(dados => setTurmas(dados))
+      .catch(erro => console.error("Erro em turmas:", erro));
+
+    // 3. Busca a BNCC na API
+    fetch('http://localhost:3333/bncc')
+      .then(res => res.json())
+      .then(dados => setBncc(dados))
+      .catch(erro => console.error("Erro na BNCC:", erro));
   }, []);
 
   const handleCadastrar = async (e: FormEvent) => {
-    e.preventDefault(); 
-
+    e.preventDefault();
     if (!novaDisciplina.trim()) return;
 
     try {
@@ -31,9 +44,8 @@ export default function App() {
 
       if (resposta.ok) {
         const dadosCadastrados = await resposta.json();
-        
         setDisciplinas([...disciplinas, dadosCadastrados[0]]);
-        setNovaDisciplina('');
+        setNovaDisciplina(''); 
       }
     } catch (erro) {
       console.error("Erro ao cadastrar:", erro);
@@ -48,7 +60,6 @@ export default function App() {
           📚 PlanejEasy
         </h1>
 
-        {/* FORMULÁRIO DE ENVIO*/}
         <form onSubmit={handleCadastrar} className="mb-8 flex gap-2">
           <input
             type="text"
@@ -57,32 +68,12 @@ export default function App() {
             onChange={(e) => setNovaDisciplina(e.target.value)}
             className="flex-1 border border-gray-300 rounded px-4 py-2 focus:outline-none focus:border-blue-500"
           />
-          <button
-            type="submit"
-            className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-medium transition-colors"
-          >
+          <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-medium">
             Cadastrar
           </button>
         </form>
         
-        <h2 className="text-xl font-semibold text-gray-700 mb-4">
-          Disciplinas Cadastradas no Banco:
-        </h2>
-
-        <ul className="space-y-2">
-          {disciplinas.length > 0 ? (
-            disciplinas.map((disciplina) => (
-              <li 
-                key={disciplina.id} 
-                className="bg-blue-50 p-3 rounded border border-blue-100 text-blue-900 font-medium flex justify-between items-center"
-              >
-                {disciplina.nome}
-              </li>
-            ))
-          ) : (
-            <p className="text-gray-500 italic">Nenhuma disciplina carregada...</p>
-          )}
-        </ul>
+        <FormularioPlanoAula disciplinas={disciplinas} turmas={turmas} bncc={bncc} />
 
       </div>
     </div>
