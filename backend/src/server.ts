@@ -176,23 +176,6 @@ app.post('/planos', async (req, res) => {
   }
 });
 
-// Rota para buscar os objetos da BNCC
-app.get('/bncc', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('objetos_bncc')
-      .select('*');
-
-    if (error) {
-      return res.status(400).json({ erro: error.message });
-    }
-
-    return res.json(data);
-  } catch (error) {
-    return res.status(500).json({ erro: 'Erro interno no servidor' });
-  }
-});
-
 // Rota para cadastrar um novo Plano de Aula
 app.post('/planos-de-aula', async (req, res) => {
   try {
@@ -221,30 +204,26 @@ app.post('/planos-de-aula', async (req, res) => {
   }
 });
 
-// ==========================================
-// ROTA PARA SALVAR MÚLTIPLOS PLANOS (LOTE)
-// ==========================================
-app.post('/planos/lote', async (req, res) => {
+// Rota para buscar os objetos da BNCC
+app.get('/bncc', async (req, res) => {
   try {
-    const planosArray = req.body; // Agora esperamos receber um Array de planos
+    const { data, error } = await supabase
+      .from('objetos_bncc')
+      .select('*');
 
-    if (!Array.isArray(planosArray) || planosArray.length === 0) {
-      return res.status(400).json({ erro: 'Nenhum plano foi enviado.' });
+    if (error) {
+      return res.status(400).json({ erro: error.message });
     }
 
-    // O Supabase insere o array inteiro de uma só vez
-    const { data, error } = await supabase
-      .from('planos_de_aula')
-      .insert(planosArray)
-      .select();
-
-    if (error) return res.status(400).json({ erro: error.message });
-    return res.status(201).json(data);
-  } catch (err) {
-    console.error("Erro ao salvar lote:", err);
+    return res.json(data);
+  } catch (error) {
     return res.status(500).json({ erro: 'Erro interno no servidor' });
   }
 });
+
+// ==========================================
+// ROTA PARA IA GERAR O PLANO DE AULA (USANDO GOOGLE GEMINI)
+// ==========================================
 
 // Rota para a IA gerar o conteúdo do Plano de Aula
 app.post('/ia/gerar-plano', async (req, res) => {
@@ -255,7 +234,7 @@ app.post('/ia/gerar-plano', async (req, res) => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
     const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
     
-    // Novo Prompt: A IA agora atua como editora e organizadora da sua ideia
+    // Prompt: A IA agora atua como editora e organizadora da sua ideia
     const prompt = `
       Atue como um professor especialista em didática e editor de texto pedagógico.
       Abaixo está o meu rascunho de planejamento de aula para a disciplina de "${disciplina}" (Turma: ${turma}).
@@ -302,13 +281,40 @@ app.post('/ia/gerar-plano', async (req, res) => {
 });
 
 // ==========================================
+// ROTA PARA SALVAR MÚLTIPLOS PLANOS (LOTE)
+// ==========================================
+app.post('/planos/lote', async (req, res) => {
+  try {
+    const planosArray = req.body; 
+
+    if (!Array.isArray(planosArray) || planosArray.length === 0) {
+      return res.status(400).json({ erro: 'Nenhum plano foi enviado.' });
+    }
+
+    const { data, error } = await supabase
+      .from('planos_de_aula')
+      .insert(planosArray)
+      .select();
+
+    if (error) {
+      console.error("Erro do Supabase ao salvar lote:", error);
+      return res.status(400).json({ erro: error.message });
+    }
+
+    return res.status(201).json(data);
+  } catch (err) {
+    console.error("Erro interno ao salvar lote:", err);
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
+// ==========================================
 // ROTA DE EXPORTAÇÃO (MOLDES DO COLÉGIO)
 // ==========================================
 app.get('/planos/:id/exportar', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Busca o plano no Supabase com os nomes da Turma e Disciplina
     const { data: plano, error } = await supabase
       .from('planos_de_aula')
       .select('*, turmas(nome), disciplinas(nome)')
@@ -422,6 +428,119 @@ app.get('/planos/:id/exportar', async (req, res) => {
 
   } catch (error) {
     console.error("Erro ao gerar Excel:", error);
+    return res.status(500).json({ erro: 'Erro interno ao gerar a planilha.' });
+  }
+});
+
+// ==========================================
+// ROTA DE EXPORTAÇÃO EM LOTE PARA EXCEL
+// ==========================================
+app.get('/planos/exportar-lote', async (req, res) => {
+  try {
+    const idsString = req.query.ids as string;
+    if (!idsString) return res.status(400).json({ erro: 'Nenhum ID fornecido.' });
+    
+    // Converte a string "1,2,3" em um array numérico [1, 2, 3]
+    const ids = idsString.split(',').map(id => Number(id));
+
+    // Busca os planos selecionados no banco
+    const { data: planos, error } = await supabase
+      .from('planos_de_aula')
+      .select('*, turmas(nome), disciplinas(nome)')
+      .in('id', ids)
+      .order('id', { ascending: true });
+
+    if (error || !planos || planos.length === 0) {
+      return res.status(404).json({ erro: 'Planos não encontrados.' });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Planejamento da Quinzena');
+
+    worksheet.columns = [
+      { key: 'A', width: 15 }, { key: 'B', width: 15 },
+      { key: 'C', width: 40 }, { key: 'D', width: 65 }, { key: 'E', width: 30 },
+    ];
+
+    // Cabeçalhos Base (Usando a semana de referência da primeira aula selecionada)
+    worksheet.getCell('A1').value = 'Professor(a)';
+    worksheet.mergeCells('A1:B1');
+    worksheet.getCell('C1').value = 'Turma';
+    worksheet.getCell('D1').value = 'SEMANA DE REFERÊNCIA';
+    worksheet.mergeCells('D1:E1');
+
+    ['A1', 'C1', 'D1'].forEach(cel => {
+      const c = worksheet.getCell(cel);
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
+      c.font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 11 };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    worksheet.getCell('A2').value = '-';
+    worksheet.mergeCells('A2:B2');
+    worksheet.getCell('C2').value = planos[0].turmas?.nome || '-';
+    worksheet.getCell('D2').value = planos[0].semana_referencia || 'Semana Atual';
+    worksheet.mergeCells('D2:E2');
+    ['A2', 'C2', 'D2'].forEach(cel => worksheet.getCell(cel).alignment = { horizontal: 'center', vertical: 'middle' });
+
+    worksheet.getCell('A3').value = 'Solicitação de Materiais Gerais: ' + planos.map(p => p.localizacao_materiais).filter(Boolean).join(' | ');
+    worksheet.mergeCells('A3:E3');
+    worksheet.getCell('A3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE599' } };
+    worksheet.getCell('A3').font = { bold: true };
+
+    worksheet.getCell('A4').value = 'AULAS PLANEJADAS';
+    worksheet.mergeCells('A4:E4');
+    worksheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+    worksheet.getCell('A4').font = { bold: true };
+    worksheet.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.getCell('A5').value = 'Aula\nComponente';
+    worksheet.mergeCells('A5:B5');
+    worksheet.getCell('C5').value = 'Objeto do Conhecimento\nHabilidade';
+    worksheet.getCell('D5').value = 'Desenvolvimento / Estratégia';
+    worksheet.getCell('E5').value = 'Localização / Materiais Específicos';
+    ['A5', 'C5', 'D5', 'E5'].forEach(cel => {
+      const c = worksheet.getCell(cel);
+      c.font = { bold: true };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+
+    // Loop Dinâmico: Adiciona cada aula selecionada em uma nova linha do Grid
+    let linhaAtual = 6;
+    planos.forEach((plano) => {
+      worksheet.getCell(`A${linhaAtual}`).value = `${plano.dia_semana || ''}\n${plano.ordem_aula || ''}\n${plano.disciplinas?.nome || ''}`;
+      worksheet.mergeCells(`A${linhaAtual}:B${linhaAtual}`);
+      
+      worksheet.getCell(`C${linhaAtual}`).value = `${plano.objeto_conhecimento || ''}\n\n${plano.habilidade_bncc || ''}`;
+      
+      const estrategiaFormatada = 
+        `(INÍCIO)\n${plano.estrategia_inicio || ''}\n\n` +
+        `(DESENVOLVIMENTO)\n${plano.estrategia_desenvolvimento || ''}\n\n` +
+        `(FIM DA AULA)\n${plano.estrategia_fim || ''}`;
+      
+      worksheet.getCell(`D${linhaAtual}`).value = estrategiaFormatada;
+      worksheet.getCell(`E${linhaAtual}`).value = plano.localizacao_materiais || 'Sala de aula';
+
+      ['A', 'C', 'D', 'E'].forEach(col => {
+        worksheet.getCell(`${col}${linhaAtual}`).alignment = { wrapText: true, vertical: 'top', horizontal: col === 'D' ? 'left' : 'center' };
+      });
+
+      linhaAtual++;
+    });
+
+    worksheet.eachRow({ includeEmpty: false }, (row) => {
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=Planejamento_Lote.xlsx`);
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error("Erro ao gerar Excel em Lote:", error);
     return res.status(500).json({ erro: 'Erro interno ao gerar a planilha.' });
   }
 });
