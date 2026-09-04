@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { supabase } from './lib/supabase';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import ExcelJS from 'exceljs';
 
 dotenv.config();
 
@@ -264,6 +265,131 @@ app.post('/ia/gerar-plano', async (req, res) => {
   } catch (error) {
     console.error("Erro ao gerar com IA:", error);
     return res.status(500).json({ erro: 'Falha ao conectar com a inteligência artificial.' });
+  }
+});
+
+// ==========================================
+// ROTA DE EXPORTAÇÃO (MOLDES DO COLÉGIO)
+// ==========================================
+app.get('/planos/:id/exportar', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Busca o plano no Supabase com os nomes da Turma e Disciplina
+    const { data: plano, error } = await supabase
+      .from('planos_de_aula')
+      .select('*, turmas(nome), disciplinas(nome)')
+      .eq('id', id)
+      .single();
+
+    if (error || !plano) {
+      return res.status(404).json({ erro: 'Plano de aula não encontrado no banco.' });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Planejamento');
+
+    // 1. Configura a largura exata das colunas (A até E)
+    worksheet.columns = [
+      { key: 'A', width: 15 }, // Aula / Componente
+      { key: 'B', width: 15 }, // Espaço extra caso precise mesclar
+      { key: 'C', width: 40 }, // Objeto/Habilidade
+      { key: 'D', width: 65 }, // Desenvolvimento/Estratégia (Bem larga)
+      { key: 'E', width: 30 }, // Localização
+    ];
+
+    // 2. LINHA 1 (Cabeçalhos Azuis)
+    worksheet.getCell('A1').value = 'Professor(a)';
+    worksheet.mergeCells('A1:B1');
+    worksheet.getCell('C1').value = 'Turma';
+    worksheet.getCell('D1').value = 'QUINZENA';
+    worksheet.mergeCells('D1:E1');
+
+    ['A1', 'C1', 'D1'].forEach(celula => {
+      const c = worksheet.getCell(celula);
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } }; // Azul escuro do colégio
+      c.font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 11 };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    // 3. LINHA 2 (Dados do Cabeçalho)
+    worksheet.getCell('A2').value = '-'; // Aqui entrará o nome do professor no futuro
+    worksheet.mergeCells('A2:B2');
+    worksheet.getCell('C2').value = plano.turmas?.nome || '-';
+    worksheet.getCell('D2').value = plano.quinzena || '00/00 - 00/00';
+    worksheet.mergeCells('D2:E2');
+
+    ['A2', 'C2', 'D2'].forEach(celula => {
+      worksheet.getCell(celula).alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    // 4. LINHA 3 (Solicitação de Materiais)
+    worksheet.getCell('A3').value = 'Solicitação de Materiais: ' + (plano.localizacao_materiais || '');
+    worksheet.mergeCells('A3:E3');
+    worksheet.getCell('A3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE599' } }; // Amarelo claro
+    worksheet.getCell('A3').font = { bold: true };
+
+    // 5. LINHA 4 (Dia da Semana)
+    worksheet.getCell('A4').value = (plano.dia_semana || 'SEGUNDA-FEIRA').toUpperCase();
+    worksheet.mergeCells('A4:E4');
+    worksheet.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }; // Cinza claro
+    worksheet.getCell('A4').font = { bold: true };
+    worksheet.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // 6. LINHA 5 (Títulos das Colunas)
+    worksheet.getCell('A5').value = 'Aula\nComponente Curricular';
+    worksheet.mergeCells('A5:B5');
+    worksheet.getCell('C5').value = 'Objeto do Conhecimento\nHabilidade';
+    worksheet.getCell('D5').value = 'Desenvolvimento / Estratégia';
+    worksheet.getCell('E5').value = 'Localização';
+
+    ['A5', 'C5', 'D5', 'E5'].forEach(celula => {
+      const c = worksheet.getCell(celula);
+      c.font = { bold: true };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+
+    // 7. LINHA 6 (O Conteúdo Principal do Plano)
+    worksheet.getCell('A6').value = `${plano.ordem_aula || '1ª'}\n${plano.disciplinas?.nome || ''}`;
+    worksheet.mergeCells('A6:B6');
+    
+    // Objeto e Habilidade
+    worksheet.getCell('C6').value = `${plano.objeto_conhecimento || ''}\n\n${plano.habilidade_bncc || ''}`;
+
+    // A Mágica da Estratégia (Juntando os textos da IA com formatação)
+    const estrategiaFormatada = 
+      `(INÍCIO)\n${plano.estrategia_inicio || 'Sem dados de início.'}\n\n` +
+      `(DESENVOLVIMENTO)\n${plano.estrategia_desenvolvimento || 'Sem dados de desenvolvimento.'}\n\n` +
+      `(FIM DA AULA)\n${plano.estrategia_fim || 'Sem dados de fim.'}`;
+    
+    worksheet.getCell('D6').value = estrategiaFormatada;
+    worksheet.getCell('E6').value = plano.localizacao_materiais || 'Sala de aula';
+
+    ['A6', 'C6', 'D6', 'E6'].forEach(celula => {
+      worksheet.getCell(celula).alignment = { wrapText: true, vertical: 'top', horizontal: 'center' };
+    });
+    // Alinha a coluna D (Estratégia) à esquerda para leitura de texto longo
+    worksheet.getCell('D6').alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
+
+    // 8. Aplica bordas finas em todas as células desenhadas
+    worksheet.eachRow({ includeEmpty: false }, (row) => {
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+      });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=Planejamento_${id}.xlsx`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error("Erro ao gerar Excel:", error);
+    return res.status(500).json({ erro: 'Erro interno ao gerar a planilha.' });
   }
 });
 
