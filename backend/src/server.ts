@@ -262,8 +262,16 @@ app.post('/ia/gerar-plano', async (req, res) => {
 
     return res.status(200).json(planoGerado);
 
-  } catch (error) {
+ } catch (error: any) {
     console.error("Erro ao gerar com IA:", error);
+    
+    // Se o erro for de sobrecarga no Google
+    if (error.status === 503 || (error.message && error.message.includes('503'))) {
+      return res.status(503).json({ 
+        erro: 'O servidor da IA está muito requisitado no momento. Aguarde alguns segundos e clique em gerar novamente!' 
+      });
+    }
+
     return res.status(500).json({ erro: 'Falha ao conectar com a inteligência artificial.' });
   }
 });
