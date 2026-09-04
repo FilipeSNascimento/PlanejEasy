@@ -2,34 +2,22 @@ import { useState, type FormEvent } from 'react';
 
 interface Disciplina { id: number; nome: string; }
 interface Turma { id: number; nome: string; }
-
 interface ObjetoBncc { id: number; codigo: string; descricao: string; disciplina_id: number; }
 
 interface FormularioProps {
   disciplinas: Disciplina[];
   turmas: Turma[];
- 
   bncc: ObjetoBncc[];
 }
 
 export default function FormularioPlanoAula({ disciplinas, turmas, bncc }: FormularioProps) {
-  const [disciplinasSelecionadas, setDisciplinasSelecionadas] = useState<Disciplina[]>([]);
-  const [inputDisciplina, setInputDisciplina] = useState('');
+  const [quinzena, setQuinzena] = useState('');
+  const [turmaId, setTurmaId] = useState('');
+  const [disciplinaId, setDisciplinaId] = useState('');
+  const [estrategia, setEstrategia] = useState('');
   
   const [objetosSelecionados, setObjetosSelecionados] = useState<string[]>([]);
   const [inputObjeto, setInputObjeto] = useState('');
-
-  const adicionarDisciplina = () => {
-    const disciplinaEncontrada = disciplinas.find(d => d.nome.toLowerCase() === inputDisciplina.trim().toLowerCase());
-    if (disciplinaEncontrada && !disciplinasSelecionadas.some(d => d.id === disciplinaEncontrada.id)) {
-      setDisciplinasSelecionadas([...disciplinasSelecionadas, disciplinaEncontrada]);
-      setInputDisciplina('');
-    }
-  };
-
-  const removerDisciplina = (id: number) => {
-    setDisciplinasSelecionadas(disciplinasSelecionadas.filter(d => d.id !== id));
-  };
 
   const adicionarObjeto = () => {
     if (inputObjeto.trim() !== '' && !objetosSelecionados.includes(inputObjeto)) {
@@ -42,14 +30,49 @@ export default function FormularioPlanoAula({ disciplinas, turmas, bncc }: Formu
     setObjetosSelecionados(objetosSelecionados.filter(obj => obj !== objeto));
   };
 
-  // Procura nos objetos da BNCC apenas aqueles cujo disciplina_id exista na lista de matérias que o usuário selecionou
-  const opcoesBnccFiltradas = bncc.filter(objeto => 
-    disciplinasSelecionadas.some(disc => disc.id === objeto.disciplina_id)
+  const opcoesBnccFiltradas = bncc.filter(
+    (objeto) => objeto.disciplina_id === Number(disciplinaId)
   );
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    alert("Plano estruturado com sucesso!");
+    
+    let objetosFinais = [...objetosSelecionados];
+    if (inputObjeto.trim() !== '' && !objetosFinais.includes(inputObjeto)) {
+      objetosFinais.push(inputObjeto.trim());
+    }
+
+    const pacoteDeDados = {
+      quinzena,
+      turma_id: Number(turmaId),
+      disciplina_id: Number(disciplinaId),
+      objeto_conhecimento: objetosFinais.join(', '),
+      estrategia_desenvolvimento: estrategia
+    };
+
+    try {
+      const resposta = await fetch('http://localhost:3333/planos-de-aula', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pacoteDeDados)
+      });
+
+      if (resposta.ok) {
+        alert("🎉 Plano de Aula salvo com sucesso no Supabase!");
+        setQuinzena('');
+        setTurmaId('');
+        setDisciplinaId('');
+        setObjetosSelecionados([]);
+        setInputObjeto('');
+        setEstrategia('');
+      } else {
+        const erroServidor = await resposta.json();
+        alert("Erro ao salvar: " + erroServidor.erro);
+      }
+    } catch (erro) {
+      console.error("Erro na requisição:", erro);
+      alert("Erro de conexão com o servidor.");
+    }
   };
 
   return (
@@ -61,12 +84,22 @@ export default function FormularioPlanoAula({ disciplinas, turmas, bncc }: Formu
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Quinzena</label>
-            <input type="text" placeholder="Ex: 09/02 - 20/02" className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500" />
+            <input 
+              type="text" 
+              value={quinzena}
+              onChange={(e) => setQuinzena(e.target.value)}
+              placeholder="Ex: 09/02 - 20/02" 
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500" 
+            />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Turma</label>
-            <select className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500 bg-white">
+            <select 
+              value={turmaId}
+              onChange={(e) => setTurmaId(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500 bg-white"
+            >
               <option value="">Selecione a turma...</option>
               {turmas.map(t => (
                 <option key={t.id} value={t.id}>{t.nome}</option>
@@ -74,32 +107,46 @@ export default function FormularioPlanoAula({ disciplinas, turmas, bncc }: Formu
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Disciplinas</label>
-            <div className="flex gap-2 mb-2">
-              <input list="lista-disciplinas" type="text" value={inputDisciplina} onChange={(e) => setInputDisciplina(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); adicionarDisciplina(); } }} placeholder="Selecione as matérias..." className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500" />
-              <button type="button" onClick={adicionarDisciplina} className="bg-green-100 text-green-800 px-4 py-2 rounded hover:bg-green-200 font-medium">Add</button>
-            </div>
-            <datalist id="lista-disciplinas">
-              {disciplinas.map(d => <option key={d.id} value={d.nome} />)}
-            </datalist>
-            {disciplinasSelecionadas.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {disciplinasSelecionadas.map(d => (
-                  <span key={d.id} className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm flex items-center gap-2 shadow-sm">
-                    {d.nome} <button type="button" onClick={() => removerDisciplina(d.id)} className="text-blue-200 hover:text-white font-bold">&times;</button>
-                  </span>
-                ))}
-              </div>
-            )}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Disciplina</label>
+            <select 
+              value={disciplinaId}
+              onChange={(e) => {
+                setDisciplinaId(e.target.value);
+                setObjetosSelecionados([]);
+              }}
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500 bg-white"
+            >
+              <option value="">Selecione a disciplina...</option>
+              {disciplinas.map(d => (
+                <option key={d.id} value={d.id}>{d.nome}</option>
+              ))}
+            </select>
           </div>
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Objetos de Conhecimento (BNCC)</label>
             <div className="flex gap-2 mb-2">
-              <input list="lista-bncc" type="text" value={inputObjeto} onChange={(e) => setInputObjeto(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); adicionarObjeto(); } }} placeholder={disciplinasSelecionadas.length === 0 ? "Selecione uma matéria primeiro..." : "Selecione na lista ou digite..."} disabled={disciplinasSelecionadas.length === 0} className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed" />
-              <button type="button" onClick={adicionarObjeto} disabled={disciplinasSelecionadas.length === 0} className="bg-green-100 text-green-800 px-4 py-2 rounded hover:bg-green-200 font-medium disabled:opacity-50">Add</button>
+              <input 
+                list="lista-bncc" 
+                type="text" 
+                value={inputObjeto} 
+                onChange={(e) => setInputObjeto(e.target.value)} 
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); adicionarObjeto(); } }} 
+                placeholder={!disciplinaId ? "Selecione a disciplina primeiro..." : "Selecione na lista ou digite..."} 
+                disabled={!disciplinaId} 
+                className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed" 
+              />
+              <button 
+                type="button" 
+                onClick={adicionarObjeto} 
+                disabled={!disciplinaId} 
+                className="bg-green-100 text-green-800 px-4 py-2 rounded hover:bg-green-200 font-medium disabled:opacity-50"
+              >
+                Add
+              </button>
             </div>
+            
             {objetosSelecionados.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {objetosSelecionados.map((obj, index) => (
@@ -110,7 +157,6 @@ export default function FormularioPlanoAula({ disciplinas, turmas, bncc }: Formu
               </div>
             )}
             <datalist id="lista-bncc">
-              {/* 3. Renderizamos a descrição e o código juntos para ficar bonito na tela */}
               {opcoesBnccFiltradas.map((opcao) => (
                 <option key={opcao.id} value={`${opcao.descricao} (${opcao.codigo})`} />
               ))}
@@ -119,7 +165,13 @@ export default function FormularioPlanoAula({ disciplinas, turmas, bncc }: Formu
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Estratégia de Desenvolvimento</label>
-            <textarea rows={3} placeholder="Descreva a atividade principal..." className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500 resize-none"></textarea>
+            <textarea 
+              rows={3} 
+              value={estrategia}
+              onChange={(e) => setEstrategia(e.target.value)}
+              placeholder="Descreva a atividade principal..." 
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-green-500 resize-none"
+            ></textarea>
           </div>
 
         </div>
