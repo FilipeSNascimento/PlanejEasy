@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import FormularioPlanoAula from './components/FormularioPlanoAula';
+import PerfilProfessor from './components/PerfilProfessor';
 
 interface Disciplina { id: number; nome: string; }
 interface Turma { id: number; nome: string; }
@@ -74,7 +75,7 @@ export default function App() {
         </form>
         
         <FormularioPlanoAula disciplinas={disciplinas} turmas={turmas} bncc={bncc} />
-
+        <PerfilProfessor />
       </div>
     </div>
   );

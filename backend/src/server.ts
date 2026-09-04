@@ -87,6 +87,101 @@ app.post('/professores', async (req, res) => {
 });
 
 // ==========================================
+// ROTAS DE PERFIL E DADOS DO PROFESSOR
+// ==========================================
+
+// Buscar perfil completo (incluindo turmas e disciplinas do professor)
+app.get('/professor/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Busca os dados cadastrais do professor
+    const { data: professor, error: errProf } = await supabase
+      .from('professores')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (errProf) return res.status(404).json({ erro: 'Professor não encontrado.' });
+
+    // Busca as turmas deste professor
+    const { data: turmas } = await supabase
+      .from('turmas')
+      .select('*')
+      .eq('professor_id', id);
+
+    // Busca todas as disciplinas disponíveis (ou vinculadas)
+    const { data: disciplinas } = await supabase
+      .from('disciplinas')
+      .select('*');
+
+    return res.json({
+      ...professor,
+      turmas: turmas || [],
+      disciplinasDisponiveis: disciplinas || []
+    });
+  } catch (err) {
+    console.error("Erro ao buscar perfil completo:", err);
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
+// Atualizar perfil, turmas e disciplinas
+app.put('/professor/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nome, email, turmas, disciplinasDisponiveis } = req.body;
+
+    // 1. Atualiza dados básicos do professor
+    await supabase.from('professores').update({ nome, email }).eq('id', id);
+
+    // 2. SINCRONIZAR TURMAS
+    if (turmas && Array.isArray(turmas)) {
+      // Pega os IDs das turmas que vieram do Front-end (que o usuário manteve)
+      const turmasMantidasIds = turmas.filter((t: any) => t.id).map((t: any) => t.id);
+      
+      // Se tiver turmas mantidas, deleta as que NÃO estão nessa lista. Se não tiver nenhuma, deleta todas.
+      if (turmasMantidasIds.length > 0) {
+        await supabase.from('turmas').delete().eq('professor_id', id).not('id', 'in', `(${turmasMantidasIds.join(',')})`);
+      } else {
+        await supabase.from('turmas').delete().eq('professor_id', id);
+      }
+
+      // Insere as novas (sem ID) ou atualiza as existentes
+      for (const turma of turmas) {
+        if (turma.id) {
+          await supabase.from('turmas').update({ nome: turma.nome }).eq('id', turma.id);
+        } else {
+          await supabase.from('turmas').insert({ nome: turma.nome, professor_id: id, turno: 'Matutino' });
+        }
+      }
+    }
+
+    // 3. SINCRONIZAR DISCIPLINAS (Globais)
+    if (disciplinasDisponiveis && Array.isArray(disciplinasDisponiveis)) {
+      // Cria uma lista dos IDs das disciplinas que o usuário manteve
+      const disciplinasMantidasIds = disciplinasDisponiveis.filter((d: any) => d.id).map((d: any) => d.id);
+      
+      // Deleta as disciplinas que foram removidas pelo usuário (cuidado: pode falhar se já houver aulas salvas com ela)
+      if (disciplinasMantidasIds.length > 0) {
+        await supabase.from('disciplinas').delete().not('id', 'in', `(${disciplinasMantidasIds.join(',')})`);
+      }
+
+      // Insere as novas disciplinas criadas no painel
+      const novasDisciplinas = disciplinasDisponiveis.filter((d: any) => !d.id);
+      for (const disc of novasDisciplinas) {
+        await supabase.from('disciplinas').insert({ nome: disc.nome });
+      }
+    }
+
+    return res.json({ mensagem: 'Perfil, turmas e disciplinas sincronizados com sucesso!' });
+  } catch (err) {
+    console.error("Erro ao atualizar perfil:", err);
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
+// ==========================================
 // ROTAS DE TURMAS
 // ==========================================
 
