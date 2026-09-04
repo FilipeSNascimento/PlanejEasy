@@ -221,6 +221,31 @@ app.post('/planos-de-aula', async (req, res) => {
   }
 });
 
+// ==========================================
+// ROTA PARA SALVAR MÚLTIPLOS PLANOS (LOTE)
+// ==========================================
+app.post('/planos/lote', async (req, res) => {
+  try {
+    const planosArray = req.body; // Agora esperamos receber um Array de planos
+
+    if (!Array.isArray(planosArray) || planosArray.length === 0) {
+      return res.status(400).json({ erro: 'Nenhum plano foi enviado.' });
+    }
+
+    // O Supabase insere o array inteiro de uma só vez
+    const { data, error } = await supabase
+      .from('planos_de_aula')
+      .insert(planosArray)
+      .select();
+
+    if (error) return res.status(400).json({ erro: error.message });
+    return res.status(201).json(data);
+  } catch (err) {
+    console.error("Erro ao salvar lote:", err);
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
 // Rota para a IA gerar o conteúdo do Plano de Aula
 app.post('/ia/gerar-plano', async (req, res) => {
   try {
