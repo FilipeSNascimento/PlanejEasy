@@ -74,7 +74,7 @@ Plataforma web desenvolvida para otimizar o fluxo de trabalho pedagógico de edu
 
 1. Clone o repositório:
 ```bash
-git clone [https://github.com/FilipeSNascimento/PlanejEasy.git](https://github.com/FilipeSNascimento/PlanejEasy.git)
+git clone [https://github.com/FilipeSNascimento/PlanejEasy.git]
 cd PlanejEasy
 ```
 
