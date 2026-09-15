@@ -1,18 +1,20 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import FormularioPlanoAula from './components/FormularioPlanoAula';
+import { useEffect, useState } from 'react';
+import { Menu } from 'lucide-react';
+import Sidebar, { type AbaNavegacao } from './components/Sidebar';
+import CriarPlanejamento from './components/CriarPlanejamento';
 import PerfilProfessor from './components/PerfilProfessor';
 
 interface Disciplina { id: number; nome: string; }
 interface Turma { id: number; nome: string; }
-
 interface ObjetoBncc { id: number; codigo: string; descricao: string; disciplina_id: number; }
 
 export default function App() {
+  const [abaAtiva, setAbaAtiva] = useState<AbaNavegacao>('criar');
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
+
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
-
   const [bncc, setBncc] = useState<ObjetoBncc[]>([]);
-  const [novaDisciplina, setNovaDisciplina] = useState(''); 
 
   useEffect(() => {
     fetch('http://localhost:3333/disciplinas')
@@ -25,58 +27,62 @@ export default function App() {
       .then(dados => setTurmas(dados))
       .catch(erro => console.error("Erro em turmas:", erro));
 
-    // 3. Busca a BNCC na API
     fetch('http://localhost:3333/bncc')
       .then(res => res.json())
       .then(dados => setBncc(dados))
       .catch(erro => console.error("Erro na BNCC:", erro));
   }, []);
 
-  const handleCadastrar = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!novaDisciplina.trim()) return;
-
-    try {
-      const resposta = await fetch('http://localhost:3333/disciplinas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: novaDisciplina })
-      });
-
-      if (resposta.ok) {
-        const dadosCadastrados = await resposta.json();
-        setDisciplinas([...disciplinas, dadosCadastrados[0]]);
-        setNovaDisciplina(''); 
-      }
-    } catch (erro) {
-      console.error("Erro ao cadastrar:", erro);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-slate-100 p-10">
-      <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
-        
-        <h1 className="text-3xl font-bold text-blue-700 mb-6 border-b pb-4">
-          📚 PlanejEasy
-        </h1>
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50/50 font-sans text-slate-800 antialiased">
+      {/* Barra de Topo exclusiva para celular */}
+      <header className="md:hidden flex items-center justify-between px-5 py-3.5 bg-white border-b border-slate-200 sticky top-0 z-30">
+        <span className="font-black text-slate-900 text-lg">
+          Planej<span className="text-blue-600">Easy</span>
+        </span>
+        <button 
+          onClick={() => setMenuMobileAberto(true)}
+          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100"
+          aria-label="Abrir Menu"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+      </header>
 
-        <form onSubmit={handleCadastrar} className="mb-8 flex gap-2">
-          <input
-            type="text"
-            placeholder="Nome da nova disciplina (ex: História)..."
-            value={novaDisciplina}
-            onChange={(e) => setNovaDisciplina(e.target.value)}
-            className="flex-1 border border-gray-300 rounded px-4 py-2 focus:outline-none focus:border-blue-500"
-          />
-          <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-medium">
-            Cadastrar
-          </button>
-        </form>
-        
-        <FormularioPlanoAula disciplinas={disciplinas} turmas={turmas} bncc={bncc} />
-        <PerfilProfessor />
-      </div>
+      {/* Barra Lateral com suporte mobile */}
+      <Sidebar 
+        abaAtiva={abaAtiva} 
+        aoMudarAba={setAbaAtiva}
+        abertaNoMobile={menuMobileAberto}
+        fecharMobile={() => setMenuMobileAberto(false)}
+      />
+
+      {/* Área de Conteúdo */}
+      <main className="flex-1 p-4 sm:p-6 lg:p-12 overflow-y-auto w-full">
+        {abaAtiva === 'criar' && (
+          <CriarPlanejamento disciplinas={disciplinas} turmas={turmas} bncc={bncc} />
+        )}
+
+        {abaAtiva === 'perfil' && (
+          <div className="max-w-4xl mx-auto">
+            <PerfilProfessor />
+          </div>
+        )}
+
+        {abaAtiva === 'aulas' && (
+          <div className="max-w-6xl mx-auto bg-white p-8 rounded-2xl border border-slate-200 shadow-sm text-center">
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Aulas Planejadas</h2>
+            <p className="text-sm text-slate-500">Esta tela exibirá a listagem e exportação de aulas.</p>
+          </div>
+        )}
+
+        {abaAtiva === 'inicio' && (
+          <div className="max-w-6xl mx-auto bg-white p-8 rounded-2xl border border-slate-200 shadow-sm text-center">
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Bem-vindo ao PlanejEasy</h2>
+            <p className="text-sm text-slate-500">Selecione "Criar Planejamento" no menu para começar.</p>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
