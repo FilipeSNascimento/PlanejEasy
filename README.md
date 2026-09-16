@@ -46,7 +46,7 @@ Plataforma web desenvolvida para otimizar o fluxo de trabalho pedagógico de edu
 ---
 
 ### 🚧 Em Andamento / Próximos Passos
-- [ ] **Página Dedicada de Aulas Planejadas:** Interface exclusiva para visualização, filtros e gestão do histórico geral de aulas.
+- [x] **Página Dedicada de Aulas Planejadas:** Interface exclusiva para visualização, filtros e gestão do histórico geral de aulas.
 - [ ] **Reaproveitamento Inteligente (Clonagem de Aulas):** Fluxo para duplicar e adaptar planos já existentes entre diferentes turmas.
 - [ ] **Filtros de Busca Avançada:** Pesquisa refinada no acervo por data, turma, disciplina e termos-chave.
 - [ ] **Autenticação & Controle de Acesso:** Sistema de autenticação e isolamento de sessão multiusuário via Supabase Auth.
