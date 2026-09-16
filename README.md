@@ -33,28 +33,30 @@ Plataforma web desenvolvida para otimizar o fluxo de trabalho pedagógico de edu
 
 ---
 
-## 📌 Status de Desenvolvimento
+# 📌 Status de Desenvolvimento — PlanejEasy
 
-#### ✅ Concluído
+---
+
+### ✅ Concluído
 
 - [x] **Modelagem Relacional (Supabase/PostgreSQL):** Tabelas estruturadas e relacionadas (`professores`, `turmas`, `disciplinas`, `objetos_bncc`, `planos_de_aula`).
-- [x] **Arquitetura Modular do Backend:** Separação estrutural entre o servidor (`server.ts`) e o roteamento desacoplado (`routes.ts`) com tratamento centralizado de erros.
+- [x] **Migração para UUID & Integridade Referencial:** Transição de chaves primárias e estrangeiras de inteiros para UUID, alinhando a persistência diretamente com o `auth.users` do Supabase via trigger automatizado.
+- [x] **Autenticação & Isolamento Multiusuário:** Supabase Auth integrado ponta a ponta (login restrito, validação de tokens JWT no backend via `authMiddleware` e isolamento de consultas com `req.userId`).
+- [x] **Arquitetura Modular do Backend:** Separação estrutural entre o servidor (`server.ts`) e o roteamento desacoplado (`routes.ts`) com tratamento centralizado de erros e controle de acesso.
 - [x] **Motor de GenAI (Google Gemini API):** Integração com o modelo `gemini-3.6-flash` para estruturação de rascunhos livres em etapas didáticas formais (Início, Desenvolvimento, Fim e Recursos/Localização).
 - [x] **Interface de Criação com Fila em Lote:** Seletor dinâmico de objetos BNCC por disciplina, cálculo automático da semana letiva e sistema de toasts flutuantes para feedback de operações.
 - [x] **Página Dedicada de Aulas Planejadas:** Visualização do acervo com seleção múltipla para exportação, remoção do banco de dados e modal de edição completa (ajuste de turma, data, ordem da aula e etapas didáticas).
 - [x] **Hierarquia Visual Multinível:** Agrupamento de aulas por Turma e Semana de referência com sanfonas (*accordions* colapsáveis iniciando recolhidos por padrão).
-- [x] **Reaproveitamento Inteligente (Clonagem Direta):** Duplicação ágil de planos com geração de cópia persistida no banco com apenas um clique.
-- [x] **Busca e Filtro em Tempo Real:** Filtragem dinâmica do histórico cruzando conteúdo didático, turma, semana e componente curricular.
-- [x] **Exportação Institucional por Grade Diária (ExcelJS):** Geração de planilhas formatadas com tabelas segmentadas por dia, cabeçalho de professor automatizado e grade fixa de 1ª a 6ª aula (com suporte a lacunas de horários vagos).
-- [x] **Gestão de Perfil, Turmas e Disciplinas:** Painel interativo para sincronização dinâmica de dados do professor, turmas ativas e componentes curriculares lecionados.
+- [x] **Clonagem Transversal entre Turmas:** Duplicação direta e flexível de planos com suporte a seleção da turma de destino no momento da cópia.
+- [x] **Busca e Filtros Combinados em Tempo Real:** Filtragem dinâmica simultânea por busca textual ampla, seleção por componente curricular (disciplina) e intervalo de datas (De / Até).
+- [x] **Exportação Institucional por Grade Diária (ExcelJS):** Geração de planilhas formatadas com tabelas segmentadas por dia, cabeçalho de professor automatizado e grade fixa de 1ª a 6ª aula (com suporte a lacunas de horários vagos e validação de posse do plano).
+- [x] **Gestão de Perfil, Turmas e Disciplinas:** Painel interativo com consumo autenticado (`apiFetch` / `/professor/me`) para sincronização dinâmica dos dados do professor logado e das turmas ativas.
+- [x] **Navegação & Encerramento de Sessão:** Sidebar com fluxo de logout integrado (`supabase.auth.signOut()`) e transições seguras de interface.
 
 ---
 
 ### 🚧 Em Andamento / Próximos Passos
 
-- [ ] **Autenticação & Isolamento Multiusuário:** Implementação do Supabase Auth (fluxos de login, cadastro e JWT) para restringir o acesso apenas aos dados do professor autenticado.
-- [ ] **Clonagem Transversal entre Turmas:** Evolução do fluxo de duplicador para permitir a escolha da turma de destino no momento da cópia.
-- [ ] **Filtros Avançados por Parâmetros:** Seletores dedicados por intervalo de datas e componentes específicos para complementar a busca textual.
 - [ ] **Modelos Didáticos Segmentados:** Ajuste de fluxos para Professor Regente (rotina contínua diária) vs. Professor Aulista (visão por grade horária e replicação paralela).
 
 ---
@@ -65,7 +67,7 @@ Plataforma web desenvolvida para otimizar o fluxo de trabalho pedagógico de edu
 - [ ] **Exportação Direta em PDF:** Geração de relatórios visuais formatados para impressão e download em PDF direto pelo navegador.
 - [ ] **Banco de Aulas Favoritas:** Sistema de marcação de planos modelo para reaproveitamento rápido em semestres futuros.
 - [ ] **Modo Escuro (Dark Mode):** Alternância de contraste na interface com foco em conforto visual para planejamento noturno.
-      
+
 ---
 
 ## 💻 Como Rodar o Projeto Localmente
