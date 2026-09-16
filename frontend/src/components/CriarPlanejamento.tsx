@@ -1,14 +1,15 @@
 import { useState } from 'react';
+import { apiFetch } from '../lib/api';
 import { 
   Calendar, 
-  Sparkles, 
   BookOpen, 
-  Save, 
+  GraduationCap, 
+  Sparkles, 
   Plus, 
   X, 
-  GraduationCap, 
-  CheckCircle2,
-  AlertCircle
+  Save, 
+  CheckCircle2, 
+  AlertCircle 
 } from 'lucide-react';
 
 interface Disciplina { id: number; nome: string; }
@@ -23,7 +24,7 @@ interface FormularioProps {
 
 interface AulaPlanejada {
   id?: number;
-  professor_id: number;
+  professor_id?: number | string;
   data_aula: string;
   semana_referencia: string;
   turma_id: number;
@@ -102,9 +103,8 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
       const nomeDisciplina = disciplinas.find(d => d.id === Number(disciplinaId))?.nome || '';
       const nomeTurma = turmas.find(t => t.id === Number(turmaId))?.nome || '';
       
-      const resposta = await fetch('http://localhost:3333/ia/gerar-plano', {
+      const resposta = await apiFetch('/ia/gerar-plano', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resumo, disciplina: nomeDisciplina, turma: nomeTurma })
       });
 
@@ -132,7 +132,6 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
     if (!estrategiaDesenvolvimento.trim()) return dispararToast('erro', 'O desenvolvimento da aula não pode ficar vazio.');
 
     const novaAula: AulaPlanejada = {
-      professor_id: 1, 
       data_aula: dataSelecionada,
       semana_referencia: calcularSemana(dataSelecionada),
       turma_id: Number(turmaId), 
@@ -160,17 +159,17 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
     if (aulasPlanejadas.length === 0) return;
     setSalvandoLote(true);
     try {
-      const resposta = await fetch('http://localhost:3333/planos/lote', {
+      const resposta = await apiFetch('/planos/lote', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(aulasPlanejadas)
       });
+
       if (resposta.ok) {
         dispararToast('sucesso', 'Todas as aulas foram salvas com sucesso no banco de dados!');
         setAulasPlanejadas([]);
       } else {
-        const errData = await resposta.json();
-        dispararToast('erro', errData.erro || 'Falha ao salvar as aulas.');
+        const errData = await resposta.json().catch(() => null);
+        dispararToast('erro', errData?.erro || 'Falha ao salvar as aulas.');
       }
     } catch (erro) {
       console.error(erro);
@@ -208,6 +207,7 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
           </div>
 
           <button
+            type="button"
             onClick={() => setToastMensagem(null)}
             className="text-slate-400 hover:text-slate-600 ml-2 p-1 rounded-lg transition-colors"
           >

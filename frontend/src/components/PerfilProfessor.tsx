@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiFetch } from '../lib/api';
 import { 
   User, 
   Mail, 
@@ -15,7 +16,7 @@ interface Turma { id?: number; nome: string; }
 interface Disciplina { id?: number; nome: string; }
 
 interface ProfessorPerfil {
-  id: number;
+  id: string;
   nome: string;
   email: string;
   turmas: Turma[];
@@ -24,7 +25,7 @@ interface ProfessorPerfil {
 
 export default function PerfilProfessor() {
   const [perfil, setPerfil] = useState<ProfessorPerfil>({
-    id: 1, 
+    id: '', 
     nome: '', 
     email: '', 
     turmas: [], 
@@ -40,13 +41,13 @@ export default function PerfilProfessor() {
   useEffect(() => {
     async function carregarPerfil() {
       try {
-        const resposta = await fetch('http://localhost:3333/professor/1');
+        const resposta = await apiFetch('/professor/me');
         if (resposta.ok) {
           const dados = await resposta.json();
           setPerfil(dados);
         }
       } catch (erro) { 
-        console.error("Erro ao carregar:", erro); 
+        console.error("Erro ao carregar perfil:", erro); 
       } finally { 
         setLoading(false); 
       }
@@ -56,24 +57,31 @@ export default function PerfilProfessor() {
 
   const adicionarTurma = () => {
     if (!novaTurmaNome.trim()) return;
-    setPerfil({ ...perfil, turmas: [...perfil.turmas, { nome: novaTurmaNome }] });
+    setPerfil(prev => ({ ...prev, turmas: [...prev.turmas, { nome: novaTurmaNome.trim() }] }));
     setNovaTurmaNome('');
   };
 
   const removerTurma = (index: number) => {
-    const novasTurmas = perfil.turmas.filter((_, i) => i !== index);
-    setPerfil({ ...perfil, turmas: novasTurmas });
+    setPerfil(prev => ({
+      ...prev,
+      turmas: prev.turmas.filter((_, i) => i !== index)
+    }));
   };
 
   const adicionarDisciplina = () => {
     if (!novaDisciplinaNome.trim()) return;
-    setPerfil({ ...perfil, disciplinasDisponiveis: [...perfil.disciplinasDisponiveis, { nome: novaDisciplinaNome }] });
+    setPerfil(prev => ({ 
+      ...prev, 
+      disciplinasDisponiveis: [...prev.disciplinasDisponiveis, { nome: novaDisciplinaNome.trim() }] 
+    }));
     setNovaDisciplinaNome('');
   };
 
   const removerDisciplina = (index: number) => {
-    const novasDisc = perfil.disciplinasDisponiveis.filter((_, i) => i !== index);
-    setPerfil({ ...perfil, disciplinasDisponiveis: novasDisc });
+    setPerfil(prev => ({
+      ...prev,
+      disciplinasDisponiveis: prev.disciplinasDisponiveis.filter((_, i) => i !== index)
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,23 +90,20 @@ export default function PerfilProfessor() {
     setMensagemSucesso('');
 
     try {
-      const resposta = await fetch('http://localhost:3333/professor/1', {
+      const resposta = await apiFetch('/professor/me', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(perfil)
       });
 
       if (resposta.ok) {
-        setMensagemSucesso('Perfil atualizado com sucesso! Sincronizando sistema...');
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
+        setMensagemSucesso('Perfil salvo com sucesso!');
+        setTimeout(() => setMensagemSucesso(''), 3000);
       } else {
-        alert('Erro ao atualizar perfil. Certifique-se de não apagar turmas ou disciplinas já vinculadas a aulas salvas.');
+        alert('Erro ao sincronizar perfil com o servidor.');
       }
     } catch (erro) {
       console.error("Erro:", erro);
-      alert('Erro de conexão com o servidor.');
+      alert('Erro de conexão ao salvar.');
     } finally {
       setSalvando(false);
     }
@@ -115,7 +120,6 @@ export default function PerfilProfessor() {
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
-      {/* Cabeçalho */}
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
           <User className="w-6 h-6" />
@@ -138,7 +142,6 @@ export default function PerfilProfessor() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Card: Dados Cadastrais */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
           <div className="border-b border-slate-100 pb-3">
             <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
@@ -173,9 +176,9 @@ export default function PerfilProfessor() {
                 <input 
                   type="email" 
                   value={perfil.email} 
-                  onChange={e => setPerfil({ ...perfil, email: e.target.value })} 
-                  className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
-                  required 
+                  disabled
+                  title="E-mail gerenciado pela autenticação segura"
+                  className="w-full pl-10 pr-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-medium text-sm outline-none cursor-not-allowed opacity-80" 
                 />
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
               </div>
@@ -183,7 +186,6 @@ export default function PerfilProfessor() {
           </div>
         </div>
 
-        {/* Card: Turmas e Disciplinas */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Gestão de Turmas */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
@@ -276,7 +278,6 @@ export default function PerfilProfessor() {
           </div>
         </div>
 
-        {/* Botão de Salvar Alterações */}
         <div className="flex justify-center pt-2">
           <button 
             type="submit" 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase } from './lib/supabase';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { authMiddleware, AuthRequest } from './middlewares/auth';
 import ExcelJS from 'exceljs';
 
 export const routes = Router();
@@ -13,56 +14,79 @@ routes.get('/ping', (_req, res) => {
 });
 
 // ==========================================
-// DISCIPLINAS
+// DISCIPLINAS (Isolamento por Docente)
 // ==========================================
-routes.get('/disciplinas', async (_req, res) => {
+routes.get('/disciplinas', authMiddleware, async (_req: AuthRequest, res) => {
   try {
-    const { data, error } = await supabase.from('disciplinas').select('*').order('nome');
-    if (error) return res.status(400).json({ erro: error.message });
-    return res.json(data);
+    const { data, error } = await supabase
+      .from('disciplinas')
+      .select('*')
+      .order('nome');
+
+    if (error) {
+      console.error('Erro em disciplinas:', error.message);
+      return res.status(400).json({ erro: error.message });
+    }
+
+    return res.json(data || []);
   } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno no servidor' });
+    return res.status(500).json({ erro: 'Erro interno ao buscar disciplinas.' });
   }
 });
 
-routes.post('/disciplinas', async (req, res) => {
+routes.post('/disciplinas', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { nome } = req.body;
     if (!nome) return res.status(400).json({ erro: 'Nome é obrigatório.' });
 
-    const { data, error } = await supabase.from('disciplinas').insert([{ nome }]).select();
-    if (error) return res.status(400).json({ erro: error.message });
-    return res.status(201).json(data);
-  } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno no servidor' });
-  }
-});
-
-// ==========================================
-// TURMAS
-// ==========================================
-routes.get('/turmas', async (_req, res) => {
-  try {
-    const { data, error } = await supabase.from('turmas').select('*').order('nome');
-    if (error) return res.status(400).json({ erro: error.message });
-    return res.json(data);
-  } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno no servidor' });
-  }
-});
-
-routes.post('/turmas', async (req, res) => {
-  try {
-    const { nome, turno, professor_id } = req.body;
     const { data, error } = await supabase
-      .from('turmas')
-      .insert([{ nome, turno: turno || 'Matutino', professor_id }])
+      .from('disciplinas')
+      .insert([{ nome, professor_id: req.userId }])
       .select();
 
     if (error) return res.status(400).json({ erro: error.message });
     return res.status(201).json(data);
+  } catch {
+    return res.status(500).json({ erro: 'Erro interno ao salvar disciplina.' });
+  }
+});
+
+// ==========================================
+// TURMAS (Isolamento por Docente)
+// ==========================================
+routes.get('/turmas', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('turmas')
+      .select('*')
+      .or(`professor_id.eq.${req.userId},professor_id.is.null`)
+      .order('nome');
+
+    if (error) {
+      console.error('Erro em turmas:', error);
+
+      const fallback = await supabase.from('turmas').select('*').order('nome');
+      return res.json(fallback.data || []);
+    }
+    return res.json(data || []);
   } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno no servidor' });
+    console.error('Catch turmas:', err);
+    return res.status(500).json({ erro: 'Erro interno ao buscar turmas.' });
+  }
+});
+
+routes.post('/turmas', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { nome, turno } = req.body;
+    const { data, error } = await supabase
+      .from('turmas')
+      .insert([{ nome, turno: turno || 'Matutino', professor_id: req.userId }])
+      .select();
+
+    if (error) return res.status(400).json({ erro: error.message });
+    return res.status(201).json(data);
+  } catch {
+    return res.status(500).json({ erro: 'Erro interno ao salvar turma.' });
   }
 });
 
@@ -74,138 +98,168 @@ routes.get('/bncc', async (_req, res) => {
     const { data, error } = await supabase.from('objetos_bncc').select('*');
     if (error) return res.status(400).json({ erro: error.message });
     return res.json(data);
-  } catch (error) {
-    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  } catch {
+    return res.status(500).json({ erro: 'Erro interno ao buscar BNCC.' });
   }
 });
 
 // ==========================================
 // PROFESSORES & PERFIL
 // ==========================================
-routes.get('/professores', async (_req, res) => {
+routes.get('/professor/me', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { data, error } = await supabase.from('professores').select('*');
-    if (error) return res.status(400).json({ erro: error.message });
-    return res.json(data);
-  } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno no servidor' });
-  }
-});
-
-routes.get('/professor/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: professor, error: errProf } = await supabase
+    const { data: prof, error } = await supabase
       .from('professores')
       .select('*')
-      .eq('id', id)
-      .single();
+      .eq('id', req.userId)
+      .maybeSingle();
 
-    if (errProf) return res.status(404).json({ erro: 'Professor não encontrado.' });
+    if (error) return res.status(400).json({ erro: error.message });
 
-    const { data: turmas } = await supabase.from('turmas').select('*').eq('professor_id', id);
-    const { data: disciplinas } = await supabase.from('disciplinas').select('*');
+    // Busca as turmas associadas a este professor
+    const { data: turmas } = await supabase
+      .from('turmas')
+      .select('*')
+      .eq('professor_id', req.userId);
+
+    // Busca a lista de disciplinas disponíveis
+    const { data: disciplinas } = await supabase
+      .from('disciplinas')
+      .select('*')
+      .order('nome');
 
     return res.json({
-      ...professor,
+      id: req.userId,
+      nome: prof?.nome || '',
+      email: prof?.email || '',
       turmas: turmas || [],
       disciplinasDisponiveis: disciplinas || []
     });
   } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno no servidor' });
+    return res.status(500).json({ erro: 'Erro interno ao carregar perfil.' });
   }
 });
 
-routes.put('/professor/:id', async (req, res) => {
+routes.put('/professor/me', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
     const { nome, email, turmas, disciplinasDisponiveis } = req.body;
 
-    await supabase.from('professores').update({ nome, email }).eq('id', id);
+    // Atualiza/Insere o perfil do professor logado
+    await supabase.from('professores').upsert({
+      id: req.userId,
+      nome,
+      email
+    });
 
+    // Sincroniza turmas
     if (turmas && Array.isArray(turmas)) {
-      const turmasMantidasIds = turmas.filter((t: any) => t.id).map((t: any) => t.id);
-      
-      if (turmasMantidasIds.length > 0) {
-        await supabase.from('turmas').delete().eq('professor_id', id).not('id', 'in', `(${turmasMantidasIds.join(',')})`);
+      const turmasComId = turmas.filter((t: any) => t.id).map((t: any) => t.id);
+
+      if (turmasComId.length > 0) {
+        await supabase
+          .from('turmas')
+          .delete()
+          .eq('professor_id', req.userId)
+          .not('id', 'in', `(${turmasComId.join(',')})`);
       } else {
-        await supabase.from('turmas').delete().eq('professor_id', id);
+        await supabase.from('turmas').delete().eq('professor_id', req.userId);
       }
 
       for (const turma of turmas) {
         if (turma.id) {
-          await supabase.from('turmas').update({ nome: turma.nome }).eq('id', turma.id);
+          await supabase.from('turmas').update({ nome: turma.nome }).eq('id', turma.id).eq('professor_id', req.userId);
         } else {
-          await supabase.from('turmas').insert({ nome: turma.nome, professor_id: id, turno: 'Matutino' });
+          await supabase.from('turmas').insert({ nome: turma.nome, professor_id: req.userId, turno: 'Matutino' });
         }
       }
     }
 
+    // Sincroniza disciplinas
     if (disciplinasDisponiveis && Array.isArray(disciplinasDisponiveis)) {
-      const discMantidasIds = disciplinasDisponiveis.filter((d: any) => d.id).map((d: any) => d.id);
-      if (discMantidasIds.length > 0) {
-        await supabase.from('disciplinas').delete().not('id', 'in', `(${discMantidasIds.join(',')})`);
+      const discComId = disciplinasDisponiveis.filter((d: any) => d.id).map((d: any) => d.id);
+
+      if (discComId.length > 0) {
+        await supabase
+          .from('disciplinas')
+          .delete()
+          .eq('professor_id', req.userId)
+          .not('id', 'in', `(${discComId.join(',')})`);
       }
+
       const novasDisciplinas = disciplinasDisponiveis.filter((d: any) => !d.id);
       for (const disc of novasDisciplinas) {
-        await supabase.from('disciplinas').insert({ nome: disc.nome });
+        await supabase.from('disciplinas').insert({ nome: disc.nome, professor_id: req.userId });
       }
     }
 
     return res.json({ mensagem: 'Perfil sincronizado com sucesso!' });
-  } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno ao sincronizar perfil' });
+  } catch {
+    return res.status(500).json({ erro: 'Erro interno ao sincronizar perfil.' });
   }
 });
 
 // ==========================================
 // PLANOS DE AULA
 // ==========================================
-
-// Listar planos (COM relacionamentos de nomes de Turma e Disciplina)
-routes.get('/planos', async (_req, res) => {
+routes.get('/planos', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { data, error } = await supabase
       .from('planos_de_aula')
       .select('*, turmas(nome), disciplinas(nome)')
+      .eq('professor_id', req.userId)
       .order('data_aula', { ascending: false });
 
-    if (error) return res.status(400).json({ erro: error.message });
+    if (error) throw error;
     return res.json(data);
-  } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  } catch {
+    return res.status(500).json({ erro: 'Erro ao buscar planos.' });
   }
 });
 
-// Salvar plano individual
-routes.post('/planos', async (req, res) => {
+routes.post('/planos', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { data, error } = await supabase.from('planos_de_aula').insert([req.body]).select();
+    const plano = {
+      ...req.body,
+      professor_id: req.userId
+    };
+
+    const { data, error } = await supabase
+      .from('planos_de_aula')
+      .insert([plano])
+      .select();
+
     if (error) return res.status(400).json({ erro: error.message });
     return res.status(201).json(data);
-  } catch (err) {
+  } catch {
     return res.status(500).json({ erro: 'Erro interno no servidor' });
   }
 });
 
-// Salvar múltiplos planos (Lote)
-routes.post('/planos/lote', async (req, res) => {
+routes.post('/planos/lote', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const planosArray = req.body;
     if (!Array.isArray(planosArray) || planosArray.length === 0) {
       return res.status(400).json({ erro: 'Nenhum plano foi enviado.' });
     }
 
-    const { data, error } = await supabase.from('planos_de_aula').insert(planosArray).select();
+    const planosComProfessor = planosArray.map((plano: any) => ({
+      ...plano,
+      professor_id: req.userId
+    }));
+
+    const { data, error } = await supabase
+      .from('planos_de_aula')
+      .insert(planosComProfessor)
+      .select();
+
     if (error) return res.status(400).json({ erro: error.message });
     return res.status(201).json(data);
-  } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno ao salvar lote' });
+  } catch {
+    return res.status(500).json({ erro: 'Erro interno ao salvar lote.' });
   }
 });
 
-// Atualizar plano existente
-routes.put('/planos/:id', async (req, res) => {
+routes.put('/planos/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const {
@@ -230,31 +284,41 @@ routes.put('/planos/:id', async (req, res) => {
         localizacao_materiais
       })
       .eq('id', id)
+      .eq('professor_id', req.userId)
       .select('*, turmas(nome), disciplinas(nome)');
 
     if (error) return res.status(400).json({ erro: error.message });
+    if (!data || data.length === 0) {
+      return res.status(404).json({ erro: 'Plano não encontrado ou sem permissão para editar.' });
+    }
+
     return res.json(data[0]);
-  } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno ao atualizar plano' });
+  } catch {
+    return res.status(500).json({ erro: 'Erro interno ao atualizar plano.' });
   }
 });
 
-// Excluir plano de aula
-routes.delete('/planos/:id', async (req, res) => {
+routes.delete('/planos/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const { error } = await supabase.from('planos_de_aula').delete().eq('id', id);
+
+    const { error } = await supabase
+      .from('planos_de_aula')
+      .delete()
+      .eq('id', id)
+      .eq('professor_id', req.userId);
+
     if (error) return res.status(400).json({ erro: error.message });
     return res.status(204).send();
-  } catch (err) {
-    return res.status(500).json({ erro: 'Erro interno ao excluir plano' });
+  } catch {
+    return res.status(500).json({ erro: 'Erro interno ao excluir plano.' });
   }
 });
 
 // ==========================================
 // INTELIGÊNCIA ARTIFICIAL (GEMINI)
 // ==========================================
-routes.post('/ia/gerar-plano', async (req, res) => {
+routes.post('/ia/gerar-plano', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { resumo, disciplina, turma } = req.body;
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -298,26 +362,26 @@ routes.post('/ia/gerar-plano', async (req, res) => {
 });
 
 // ==========================================
-// EXPORTAÇÃO EXCEL / PDF FORMATADA POR DIA
+// EXPORTAÇÃO EXCEL / FORMATADA POR DIA
 // ==========================================
-routes.get('/planos/exportar-lote', async (req, res) => {
+routes.get('/planos/exportar-lote', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const idsString = req.query.ids as string;
     if (!idsString) return res.status(400).json({ erro: 'Nenhum ID fornecido.' });
 
     const ids = idsString.split(',').map(id => Number(id));
 
-    // Busca as aulas selecionadas trazendo Turma, Disciplina e Professor
+    // Busca apenas as aulas pertencentes ao professor autenticado
     const { data: planos, error } = await supabase
       .from('planos_de_aula')
       .select('*, turmas(nome), disciplinas(nome), professores(nome)')
-      .in('id', ids);
+      .in('id', ids)
+      .eq('professor_id', req.userId);
 
     if (error || !planos || planos.length === 0) {
-      return res.status(404).json({ erro: 'Planos não encontrados.' });
+      return res.status(404).json({ erro: 'Planos não encontrados ou sem permissão.' });
     }
 
-    // Busca o nome do professor
     let nomeProfessor = planos[0].professores?.nome || '';
     if (!nomeProfessor && planos[0].professor_id) {
       const { data: profData } = await supabase
@@ -328,14 +392,12 @@ routes.get('/planos/exportar-lote', async (req, res) => {
       if (profData) nomeProfessor = profData.nome;
     }
 
-    // Função para extrair o número da ordem ("1ª", "2ª" -> 1, 2)
     const extrairNumeroOrdem = (ordemStr?: string) => {
       if (!ordemStr) return 999;
       const num = parseInt(ordemStr.replace(/\D/g, ''), 10);
       return isNaN(num) ? 999 : num;
     };
 
-    // Ordena as aulas por data e depois pela ordem numérica
     planos.sort((a, b) => {
       if (a.data_aula !== b.data_aula) {
         return (a.data_aula || '').localeCompare(b.data_aula || '');
@@ -343,7 +405,6 @@ routes.get('/planos/exportar-lote', async (req, res) => {
       return extrairNumeroOrdem(a.ordem_aula) - extrairNumeroOrdem(b.ordem_aula);
     });
 
-    // Agrupa as aulas por data
     const aulasPorDia = planos.reduce((acc, aula) => {
       const chaveData = aula.data_aula || 'Sem Data';
       if (!acc[chaveData]) acc[chaveData] = [];
@@ -354,7 +415,6 @@ routes.get('/planos/exportar-lote', async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Planejamento');
 
-    // Larguras das colunas
     worksheet.columns = [
       { key: 'A', width: 14 },
       { key: 'B', width: 14 },
@@ -365,7 +425,6 @@ routes.get('/planos/exportar-lote', async (req, res) => {
 
     let linhaAtual = 1;
 
-    // Cabeçalho Principal (Professor e Semana de Referência)
     worksheet.getCell(`A${linhaAtual}`).value = 'Professor(a)';
     worksheet.mergeCells(`A${linhaAtual}:B${linhaAtual}`);
 
@@ -392,13 +451,11 @@ routes.get('/planos/exportar-lote', async (req, res) => {
       worksheet.getCell(cel).font = { bold: true };
     });
 
-    linhaAtual++; // Próxima linha imediatamente colada, sem espaçamento em branco
+    linhaAtual++;
 
-    // Grade padrão fixa de 1ª a 6ª aula
     const posicoesAulas = ['1ª', '2ª', '3ª', '4ª', '5ª', '6ª'];
-
-    // ÚNICO loop para iterar sobre cada dia
     const dias = Object.entries(aulasPorDia) as [string, any[]][];
+
     dias.forEach(([dataStr, listaAulasDoDia], indexDia) => {
       let textoDia = dataStr;
       if (dataStr !== 'Sem Data') {
@@ -408,7 +465,6 @@ routes.get('/planos/exportar-lote', async (req, res) => {
         textoDia = `${diaSemana} - ${dataFmt}`;
       }
 
-      // Linha do Dia da Semana
       worksheet.getCell(`A${linhaAtual}`).value = textoDia;
       worksheet.mergeCells(`A${linhaAtual}:E${linhaAtual}`);
       worksheet.getCell(`A${linhaAtual}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
@@ -416,7 +472,6 @@ routes.get('/planos/exportar-lote', async (req, res) => {
       worksheet.getCell(`A${linhaAtual}`).alignment = { horizontal: 'center', vertical: 'middle' };
       linhaAtual++;
 
-      // Cabeçalho das Colunas
       worksheet.getCell(`A${linhaAtual}`).value = 'Aula / Turma\nComponente Curricular';
       worksheet.mergeCells(`A${linhaAtual}:B${linhaAtual}`);
       worksheet.getCell(`C${linhaAtual}`).value = 'Objeto do Conhecimento\nHabilidade';
@@ -431,7 +486,6 @@ routes.get('/planos/exportar-lote', async (req, res) => {
       });
       linhaAtual++;
 
-      // Renderiza as aulas de 1ª a 6ª
       posicoesAulas.forEach(pos => {
         const plano = listaAulasDoDia.find(p => (p.ordem_aula || '').startsWith(pos));
 
@@ -451,7 +505,6 @@ routes.get('/planos/exportar-lote', async (req, res) => {
           worksheet.getCell(`D${linhaAtual}`).value = estrategia;
           worksheet.getCell(`E${linhaAtual}`).value = plano.localizacao_materiais || 'Sala de aula';
         } else {
-          // Aula não preenchida
           worksheet.getCell(`A${linhaAtual}`).value = `${pos} Aula\n-\n-`;
           worksheet.getCell(`C${linhaAtual}`).value = '';
           worksheet.getCell(`D${linhaAtual}`).value = '';
@@ -471,13 +524,11 @@ routes.get('/planos/exportar-lote', async (req, res) => {
         linhaAtual++;
       });
 
-      // Espaço entre dias se houver mais de um dia selecionado
       if (indexDia < dias.length - 1) {
         linhaAtual += 2;
       }
     });
 
-    // Aplica bordas finas em todas as células desenhadas
     worksheet.eachRow({ includeEmpty: false }, (row) => {
       row.eachCell({ includeEmpty: true }, (cell) => {
         cell.border = {

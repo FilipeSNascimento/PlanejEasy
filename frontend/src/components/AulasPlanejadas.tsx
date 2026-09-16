@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiFetch } from '../lib/api';
 import { 
   Calendar, 
   BookOpen, 
@@ -82,9 +83,9 @@ export default function AulasPlanejadas() {
   const carregarAulas = async () => {
     try {
       const [resPlanos, resTurmas, resDisciplinas] = await Promise.all([
-        fetch('http://localhost:3333/planos'),
-        fetch('http://localhost:3333/turmas'),
-        fetch('http://localhost:3333/disciplinas')
+        apiFetch('/planos'),
+        apiFetch('/turmas'),
+        apiFetch('/disciplinas')
       ]);
 
       if (resPlanos.ok) setAulas(await resPlanos.json());
@@ -103,9 +104,9 @@ export default function AulasPlanejadas() {
     async function buscarDadosIniciais() {
       try {
         const [resPlanos, resTurmas, resDisciplinas] = await Promise.all([
-          fetch('http://localhost:3333/planos'),
-          fetch('http://localhost:3333/turmas'),
-          fetch('http://localhost:3333/disciplinas')
+          apiFetch('/planos'),
+          apiFetch('/turmas'),
+          apiFetch('/disciplinas')
         ]);
 
         if (ativo) {
@@ -181,9 +182,8 @@ export default function AulasPlanejadas() {
         localizacao_materiais: aulaParaClonar.localizacao_materiais || ''
       }];
 
-      const res = await fetch('http://localhost:3333/planos/lote', {
+      const res = await apiFetch('/planos/lote', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
@@ -206,7 +206,7 @@ export default function AulasPlanejadas() {
     if (!confirm('Deseja realmente excluir este planejamento?')) return;
 
     try {
-      const res = await fetch(`http://localhost:3333/planos/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/planos/${id}`, { method: 'DELETE' });
       if (res.ok) {
         dispararToast('sucesso', 'Plano removido com sucesso!');
         setAulas(prev => prev.filter(a => a.id !== id));
@@ -225,9 +225,8 @@ export default function AulasPlanejadas() {
     setSalvandoEdicao(true);
 
     try {
-      const res = await fetch(`http://localhost:3333/planos/${aulaEditando.id}`, {
+      const res = await apiFetch(`/planos/${aulaEditando.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(aulaEditando)
       });
 
@@ -246,12 +245,30 @@ export default function AulasPlanejadas() {
     }
   };
 
-  const handleExportarExcel = () => {
+  const handleExportarExcel = async () => {
     if (selecionados.length === 0) {
       return dispararToast('erro', 'Selecione pelo menos uma aula para exportar.');
     }
-    const idsString = selecionados.join(',');
-    window.location.href = `http://localhost:3333/planos/exportar-lote?ids=${idsString}`;
+
+    try {
+      const idsString = selecionados.join(',');
+      const res = await apiFetch(`/planos/exportar-lote?ids=${idsString}`);
+
+      if (!res.ok) throw new Error('Falha na geração do arquivo');
+
+      // Cria download via blob para preservar a autorização JWT
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Planejamento_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      dispararToast('erro', 'Erro ao baixar o arquivo Excel.');
+    }
   };
 
   const limparFiltros = () => {
@@ -261,7 +278,7 @@ export default function AulasPlanejadas() {
     setFiltroDataFim('');
   };
 
- const temFiltroAtivo = filtroTexto || filtroDisciplina || filtroDataInicio || filtroDataFim;
+  const temFiltroAtivo = filtroTexto || filtroDisciplina || filtroDataInicio || filtroDataFim;
 
   const aulasFiltradas = aulas.filter(aula => {
     const termo = filtroTexto.toLowerCase();
