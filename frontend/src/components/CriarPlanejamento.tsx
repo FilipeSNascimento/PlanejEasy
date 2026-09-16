@@ -7,7 +7,8 @@ import {
   Plus, 
   X, 
   GraduationCap, 
-  CheckCircle2 
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 interface Disciplina { id: number; nome: string; }
@@ -56,6 +57,7 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
   const [isGerando, setIsGerando] = useState(false);
   const [salvandoLote, setSalvandoLote] = useState(false);
   const [aulasPlanejadas, setAulasPlanejadas] = useState<AulaPlanejada[]>([]);
+  const [toastMensagem, setToastMensagem] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
 
   // Filtro de BNCC dinâmico por Disciplina
   const opcoesBnccFiltradas = bncc.filter(
@@ -86,9 +88,14 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
     return `Semana de ${fmt(segunda)} a ${fmt(sexta)}`;
   };
 
+  const dispararToast = (tipo: 'sucesso' | 'erro', texto: string) => {
+    setToastMensagem({ tipo, texto });
+    setTimeout(() => setToastMensagem(null), 4000);
+  };
+
   const handleGerarIA = async () => {
     if (!turmaId || !disciplinaId || !resumo.trim()) {
-      return alert("Selecione a Turma, a Disciplina e preencha o rascunho da aula.");
+      return dispararToast('erro', 'Selecione Turma, Disciplina e escreva o rascunho.');
     }
     setIsGerando(true);
     try {
@@ -107,21 +114,22 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
         setEstrategiaDesenvolvimento(dadosIA.estrategia_desenvolvimento || '');
         setEstrategiaFim(dadosIA.estrategia_fim || '');
         setMateriais(dadosIA.localizacao_materiais || '');
+        dispararToast('sucesso', 'Plano estruturado com sucesso pela IA!');
       } else {
-        alert("Erro ao consultar a IA. Verifique as credenciais do backend.");
+        dispararToast('erro', 'Erro ao consultar a IA. Verifique as credenciais do backend.');
       }
     } catch (erro) {
       console.error(erro);
-      alert("Erro de conexão ao gerar plano com IA.");
+      dispararToast('erro', 'Erro de conexão ao gerar plano com IA.');
     } finally {
       setIsGerando(false);
     }
   };
 
   const handleAdicionarFila = () => {
-    if (!dataSelecionada) return alert("Por favor, selecione a data da aula!");
-    if (!turmaId || !disciplinaId) return alert("Defina a Turma e a Disciplina!");
-    if (!estrategiaDesenvolvimento.trim()) return alert("O desenvolvimento da aula não pode ficar vazio.");
+    if (!dataSelecionada) return dispararToast('erro', 'Por favor, selecione a data da aula!');
+    if (!turmaId || !disciplinaId) return dispararToast('erro', 'Defina a Turma e a Disciplina!');
+    if (!estrategiaDesenvolvimento.trim()) return dispararToast('erro', 'O desenvolvimento da aula não pode ficar vazio.');
 
     const novaAula: AulaPlanejada = {
       professor_id: 1, 
@@ -145,10 +153,11 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
     setEstrategiaDesenvolvimento('');
     setEstrategiaFim('');
     setMateriais('');
+    dispararToast('sucesso', 'Aula adicionada à fila de envio.');
   };
 
   const handleSalvarTodas = async () => {
-    if (aulasPlanejadas.length === 0) return alert("A fila de envio está vazia.");
+    if (aulasPlanejadas.length === 0) return;
     setSalvandoLote(true);
     try {
       const resposta = await fetch('http://localhost:3333/planos/lote', {
@@ -157,23 +166,56 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
         body: JSON.stringify(aulasPlanejadas)
       });
       if (resposta.ok) {
-        alert("🎉 Todas as aulas foram salvas com sucesso no banco!");
+        dispararToast('sucesso', 'Todas as aulas foram salvas com sucesso no banco de dados!');
         setAulasPlanejadas([]);
       } else {
         const errData = await resposta.json();
-        alert("Falha ao salvar: " + errData.erro);
+        dispararToast('erro', errData.erro || 'Falha ao salvar as aulas.');
       }
     } catch (erro) {
       console.error(erro);
-      alert("Erro ao conectar com o banco.");
+      dispararToast('erro', 'Erro de conexão com o servidor.');
     } finally {
       setSalvandoLote(false);
     }
   };
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto">
+    <div className="space-y-8 max-w-6xl mx-auto relative">
       
+      {/* Toast Notification Flutuante */}
+      {toastMensagem && (
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xl shadow-slate-900/10 transition-all duration-300">
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+            toastMensagem.tipo === 'sucesso' 
+              ? 'bg-emerald-50 text-emerald-600' 
+              : 'bg-rose-50 text-rose-600'
+          }`}>
+            {toastMensagem.tipo === 'sucesso' ? (
+              <CheckCircle2 className="w-5 h-5" />
+            ) : (
+              <AlertCircle className="w-5 h-5" />
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-slate-900">
+              {toastMensagem.tipo === 'sucesso' ? 'Operação Concluída' : 'Atenção'}
+            </p>
+            <p className="text-xs text-slate-500 font-medium">
+              {toastMensagem.texto}
+            </p>
+          </div>
+
+          <button
+            onClick={() => setToastMensagem(null)}
+            className="text-slate-400 hover:text-slate-600 ml-2 p-1 rounded-lg transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Cabeçalho */}
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20">

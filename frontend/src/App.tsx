@@ -3,6 +3,7 @@ import { Menu } from 'lucide-react';
 import Sidebar, { type AbaNavegacao } from './components/Sidebar';
 import CriarPlanejamento from './components/CriarPlanejamento';
 import PerfilProfessor from './components/PerfilProfessor';
+import AulasPlanejadas from './components/AulasPlanejadas';
 
 interface Disciplina { id: number; nome: string; }
 interface Turma { id: number; nome: string; }
@@ -69,11 +70,8 @@ export default function App() {
           </div>
         )}
 
-        {abaAtiva === 'aulas' && (
-          <div className="max-w-6xl mx-auto bg-white p-8 rounded-2xl border border-slate-200 shadow-sm text-center">
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Aulas Planejadas</h2>
-            <p className="text-sm text-slate-500">Esta tela exibirá a listagem e exportação de aulas.</p>
-          </div>
+       {abaAtiva === 'aulas' && (
+            <AulasPlanejadas />
         )}
 
         {abaAtiva === 'inicio' && (
