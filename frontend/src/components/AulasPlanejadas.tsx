@@ -19,10 +19,13 @@ import {
   Search,
   Layers,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Filter,
+  RotateCcw
 } from 'lucide-react';
 
 interface Turma { id: number; nome: string; }
+interface Disciplina { id: number; nome: string; }
 
 interface AulaPlanejada {
   id: number;
@@ -44,17 +47,31 @@ interface AulaPlanejada {
 export default function AulasPlanejadas() {
   const [aulas, setAulas] = useState<AulaPlanejada[]>([]);
   const [turmasDisponiveis, setTurmasDisponiveis] = useState<Turma[]>([]);
+  const [disciplinasDisponiveis, setDisciplinasDisponiveis] = useState<Disciplina[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [selecionados, setSelecionados] = useState<number[]>([]);
-  const [filtroTexto, setFiltroTexto] = useState('');
 
-// Controle de colapso: inicia vazio, ou seja, tudo fechado por padrão
+  // Filtros
+  const [filtroTexto, setFiltroTexto] = useState('');
+  const [filtroDisciplina, setFiltroDisciplina] = useState('');
+  const [filtroDataInicio, setFiltroDataInicio] = useState('');
+  const [filtroDataFim, setFiltroDataFim] = useState('');
+
+  // Accordions
   const [turmasAbertas, setTurmasAbertas] = useState<Record<string, boolean>>({});
   const [semanasAbertas, setSemanasAbertas] = useState<Record<string, boolean>>({});
-  
+
   // Edição
   const [aulaEditando, setAulaEditando] = useState<AulaPlanejada | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  // Clonagem Transversal
+  const [aulaParaClonar, setAulaParaClonar] = useState<AulaPlanejada | null>(null);
+  const [turmaDestinoClone, setTurmaDestinoClone] = useState<number | null>(null);
+  const [dataDestinoClone, setDataDestinoClone] = useState<string>('');
+  const [salvandoClone, setSalvandoClone] = useState(false);
+
+  // Notificações Toast
   const [toast, setToast] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
 
   const dispararToast = (tipo: 'sucesso' | 'erro', texto: string) => {
@@ -64,13 +81,15 @@ export default function AulasPlanejadas() {
 
   const carregarAulas = async () => {
     try {
-      const [resPlanos, resTurmas] = await Promise.all([
+      const [resPlanos, resTurmas, resDisciplinas] = await Promise.all([
         fetch('http://localhost:3333/planos'),
-        fetch('http://localhost:3333/turmas')
+        fetch('http://localhost:3333/turmas'),
+        fetch('http://localhost:3333/disciplinas')
       ]);
 
       if (resPlanos.ok) setAulas(await resPlanos.json());
       if (resTurmas.ok) setTurmasDisponiveis(await resTurmas.json());
+      if (resDisciplinas.ok) setDisciplinasDisponiveis(await resDisciplinas.json());
     } catch (erro) {
       console.error('Erro ao buscar dados:', erro);
     } finally {
@@ -83,14 +102,16 @@ export default function AulasPlanejadas() {
 
     async function buscarDadosIniciais() {
       try {
-        const [resPlanos, resTurmas] = await Promise.all([
+        const [resPlanos, resTurmas, resDisciplinas] = await Promise.all([
           fetch('http://localhost:3333/planos'),
-          fetch('http://localhost:3333/turmas')
+          fetch('http://localhost:3333/turmas'),
+          fetch('http://localhost:3333/disciplinas')
         ]);
 
         if (ativo) {
           if (resPlanos.ok) setAulas(await resPlanos.json());
           if (resTurmas.ok) setTurmasDisponiveis(await resTurmas.json());
+          if (resDisciplinas.ok) setDisciplinasDisponiveis(await resDisciplinas.json());
         }
       } catch (erro) {
         console.error('Erro ao buscar aulas:', erro);
@@ -125,7 +146,6 @@ export default function AulasPlanejadas() {
     }
   };
 
-  // Alternadores de colapso
   const toggleTurma = (nomeTurma: string) => {
     setTurmasAbertas(prev => ({ ...prev, [nomeTurma]: !prev[nomeTurma] }));
   };
@@ -134,37 +154,50 @@ export default function AulasPlanejadas() {
     setSemanasAbertas(prev => ({ ...prev, [chaveSemana]: !prev[chaveSemana] }));
   };
 
-  const handleDuplicarAula = async (e: React.MouseEvent, aula: AulaPlanejada) => {
+  const abrirModalClone = (e: React.MouseEvent, aula: AulaPlanejada) => {
     e.stopPropagation();
+    setAulaParaClonar(aula);
+    setTurmaDestinoClone(aula.turma_id);
+    setDataDestinoClone(aula.data_aula || '');
+  };
+
+  const handleConfirmarClonagem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aulaParaClonar || !turmaDestinoClone) return;
+
+    setSalvandoClone(true);
     try {
-      const copia = [{
-        professor_id: aula.professor_id,
-        data_aula: aula.data_aula,
-        semana_referencia: aula.semana_referencia,
-        turma_id: aula.turma_id,
-        disciplina_id: aula.disciplina_id,
-        ordem_aula: `${aula.ordem_aula || '1ª'} (Cópia)`,
-        objeto_conhecimento: aula.objeto_conhecimento || '',
-        estrategia_inicio: aula.estrategia_inicio || '',
-        estrategia_desenvolvimento: aula.estrategia_desenvolvimento || '',
-        estrategia_fim: aula.estrategia_fim || '',
-        localizacao_materiais: aula.localizacao_materiais || ''
+      const payload = [{
+        professor_id: aulaParaClonar.professor_id,
+        data_aula: dataDestinoClone || aulaParaClonar.data_aula,
+        semana_referencia: aulaParaClonar.semana_referencia,
+        turma_id: turmaDestinoClone,
+        disciplina_id: aulaParaClonar.disciplina_id,
+        ordem_aula: aulaParaClonar.ordem_aula || '1ª Aula',
+        objeto_conhecimento: aulaParaClonar.objeto_conhecimento || '',
+        estrategia_inicio: aulaParaClonar.estrategia_inicio || '',
+        estrategia_desenvolvimento: aulaParaClonar.estrategia_desenvolvimento || '',
+        estrategia_fim: aulaParaClonar.estrategia_fim || '',
+        localizacao_materiais: aulaParaClonar.localizacao_materiais || ''
       }];
 
       const res = await fetch('http://localhost:3333/planos/lote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(copia)
+        body: JSON.stringify(payload)
       });
 
       if (res.ok) {
-        dispararToast('sucesso', 'Aula duplicada com sucesso!');
-        carregarAulas();
+        dispararToast('sucesso', 'Plano clonado com sucesso para a nova turma!');
+        setAulaParaClonar(null);
+        await carregarAulas();
       } else {
-        dispararToast('erro', 'Não foi possível duplicar a aula.');
+        dispararToast('erro', 'Falha ao duplicar plano.');
       }
     } catch {
-      dispararToast('erro', 'Erro de conexão ao duplicar aula.');
+      dispararToast('erro', 'Erro de conexão ao duplicar plano.');
+    } finally {
+      setSalvandoClone(false);
     }
   };
 
@@ -221,13 +254,39 @@ export default function AulasPlanejadas() {
     window.location.href = `http://localhost:3333/planos/exportar-lote?ids=${idsString}`;
   };
 
+  const limparFiltros = () => {
+    setFiltroTexto('');
+    setFiltroDisciplina('');
+    setFiltroDataInicio('');
+    setFiltroDataFim('');
+  };
+
+ const temFiltroAtivo = filtroTexto || filtroDisciplina || filtroDataInicio || filtroDataFim;
+
   const aulasFiltradas = aulas.filter(aula => {
     const termo = filtroTexto.toLowerCase();
     const estrategia = aula.estrategia_desenvolvimento?.toLowerCase() || '';
     const semana = aula.semana_referencia?.toLowerCase() || '';
     const turma = aula.turmas?.nome?.toLowerCase() || '';
     const disciplina = aula.disciplinas?.nome?.toLowerCase() || '';
-    return estrategia.includes(termo) || semana.includes(termo) || turma.includes(termo) || disciplina.includes(termo);
+
+    const matchTexto = !filtroTexto || (
+      estrategia.includes(termo) ||
+      semana.includes(termo) ||
+      turma.includes(termo) ||
+      disciplina.includes(termo)
+    );
+
+    const matchDisciplina = !filtroDisciplina || String(aula.disciplina_id) === filtroDisciplina;
+
+    const dataPlano = aula.data_aula ? new Date(aula.data_aula + 'T00:00:00').getTime() : null;
+    const dataMin = filtroDataInicio ? new Date(filtroDataInicio + 'T00:00:00').getTime() : null;
+    const dataMax = filtroDataFim ? new Date(filtroDataFim + 'T00:00:00').getTime() : null;
+
+    const matchDataInicio = !dataMin || (dataPlano !== null && dataPlano >= dataMin);
+    const matchDataFim = !dataMax || (dataPlano !== null && dataPlano <= dataMax);
+
+    return matchTexto && matchDisciplina && matchDataInicio && matchDataFim;
   });
 
   const turmasAgrupadas = aulasFiltradas.reduce((acc, aula) => {
@@ -268,7 +327,7 @@ export default function AulasPlanejadas() {
             <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-blue-900 to-blue-600">
               Aulas Planejadas
             </h1>
-            <p className="text-sm text-slate-500">Histórico segmentado por turma e semana com seções minimizáveis.</p>
+            <p className="text-sm text-slate-500">Histórico de planos, clonagem inter-turmas e exportação estruturada.</p>
           </div>
         </div>
 
@@ -282,35 +341,86 @@ export default function AulasPlanejadas() {
         </button>
       </div>
 
-      {/* Busca e Seleção Geral */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full sm:w-96">
-          <input
-            type="text"
-            value={filtroTexto}
-            onChange={(e) => setFiltroTexto(e.target.value)}
-            placeholder="Pesquisar por conteúdo, turma, disciplina..."
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
-          />
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+      {/* Filtros Avançados */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          {/* Busca textual */}
+          <div className="relative md:col-span-2">
+            <input
+              type="text"
+              value={filtroTexto}
+              onChange={(e) => setFiltroTexto(e.target.value)}
+              placeholder="Pesquisar por conteúdo, turma, código..."
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
+            />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+          </div>
+
+          {/* Filtro por Componente Curricular */}
+          <div>
+            <select
+              value={filtroDisciplina}
+              onChange={(e) => setFiltroDisciplina(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="">Todas as Disciplinas</option>
+              {disciplinasDisponiveis.map(d => (
+                <option key={d.id} value={d.id}>{d.nome}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Intervalo de datas */}
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={filtroDataInicio}
+              title="Data inicial"
+              onChange={(e) => setFiltroDataInicio(e.target.value)}
+              className="w-1/2 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 outline-none focus:bg-white focus:border-blue-500"
+            />
+            <input
+              type="date"
+              value={filtroDataFim}
+              title="Data final"
+              onChange={(e) => setFiltroDataFim(e.target.value)}
+              className="w-1/2 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 outline-none focus:bg-white focus:border-blue-500"
+            />
+          </div>
         </div>
 
-        {aulasFiltradas.length > 0 && (
-          <button
-            onClick={selecionarTodos}
-            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 transition-colors self-start sm:self-auto"
-          >
-            {selecionados.length === aulasFiltradas.length ? (
-              <>
-                <CheckSquare className="w-4 h-4" /> Desmarcar Todos
-              </>
-            ) : (
-              <>
-                <Square className="w-4 h-4" /> Selecionar Todos ({aulasFiltradas.length})
-              </>
+        {/* Linha de status dos filtros e seleção total */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 text-xs">
+          <div className="flex items-center gap-2 text-slate-500">
+            <Filter className="w-3.5 h-3.5" />
+            <span>Exibindo <strong>{aulasFiltradas.length}</strong> de <strong>{aulas.length}</strong> planos</span>
+            {temFiltroAtivo && (
+              <button
+                onClick={limparFiltros}
+                className="ml-2 inline-flex items-center gap-1 text-rose-600 hover:text-rose-800 font-bold"
+              >
+                <RotateCcw className="w-3 h-3" /> Limpar filtros
+              </button>
             )}
-          </button>
-        )}
+          </div>
+
+          {aulasFiltradas.length > 0 && (
+            <button
+              onClick={selecionarTodos}
+              className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 transition-colors"
+            >
+              {selecionados.length === aulasFiltradas.length ? (
+                <>
+                  <CheckSquare className="w-4 h-4" /> Desmarcar Todos
+                </>
+              ) : (
+                <>
+                  <Square className="w-4 h-4" /> Selecionar Todos ({aulasFiltradas.length})
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Conteúdo com Agrupamento Colapsável */}
@@ -323,7 +433,7 @@ export default function AulasPlanejadas() {
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
           <Inbox className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <h3 className="text-lg font-bold text-slate-700">Nenhum planejamento encontrado</h3>
-          <p className="text-sm text-slate-400 mt-1">Crie seu primeiro plano na aba "Criar Planejamento".</p>
+          <p className="text-sm text-slate-400 mt-1">Ajuste os filtros ou crie planos na aba "Criar Planejamento".</p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -392,7 +502,7 @@ export default function AulasPlanejadas() {
                             </button>
                           </div>
 
-                          {/* Grid de Cards da Semana (se aberta) */}
+                          {/* Grid de Cards da Semana */}
                           {semanaAberta && (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-1">
                               {listaAulas.map((aula) => {
@@ -454,8 +564,8 @@ export default function AulasPlanejadas() {
                                       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                         <button
                                           type="button"
-                                          title="Duplicar esta aula"
-                                          onClick={(e) => handleDuplicarAula(e, aula)}
+                                          title="Clonar para outra turma"
+                                          onClick={(e) => abrirModalClone(e, aula)}
                                           className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                                         >
                                           <Copy className="w-4 h-4" />
@@ -491,6 +601,81 @@ export default function AulasPlanejadas() {
               </section>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal de Clonagem Transversal entre Turmas */}
+      {aulaParaClonar && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Copy className="w-5 h-5 text-blue-600" />
+                <h3 className="font-bold text-slate-900 text-base">Clonar Plano de Aula</h3>
+              </div>
+              <button 
+                onClick={() => setAulaParaClonar(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmarClonagem} className="p-6 space-y-4">
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Duplique o plano de <strong>{aulaParaClonar.disciplinas?.nome}</strong> para outra turma ou data sem reescrever o conteúdo.
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Turma de Destino
+                </label>
+                <select
+                  value={turmaDestinoClone || ''}
+                  onChange={(e) => setTurmaDestinoClone(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-blue-500 focus:bg-white"
+                  required
+                >
+                  {turmasDisponiveis.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.nome} {t.id === aulaParaClonar.turma_id ? '(Turma Atual)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Data da Aula
+                </label>
+                <input
+                  type="date"
+                  value={dataDestinoClone}
+                  onChange={(e) => setDataDestinoClone(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-blue-500 focus:bg-white"
+                  required
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAulaParaClonar(null)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-500 hover:bg-slate-100 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoClone}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-md disabled:opacity-50 transition-all"
+                >
+                  <Copy className="w-4 h-4" />
+                  {salvandoClone ? 'Clonando...' : 'Confirmar Cópia'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
