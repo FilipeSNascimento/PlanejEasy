@@ -9,7 +9,9 @@ import {
   X, 
   Save, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  Bell,
+  FileText
 } from 'lucide-react';
 
 interface Disciplina { id: number; nome: string; }
@@ -35,6 +37,7 @@ interface AulaPlanejada {
   estrategia_desenvolvimento: string;
   estrategia_fim: string;
   localizacao_materiais: string;
+  lembrete?: string;
 }
 
 export default function CriarPlanejamento({ disciplinas, turmas, bncc }: FormularioProps) {
@@ -52,7 +55,8 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
   const [estrategiaInicio, setEstrategiaInicio] = useState('');
   const [estrategiaDesenvolvimento, setEstrategiaDesenvolvimento] = useState('');
   const [estrategiaFim, setEstrategiaFim] = useState('');
-  const [materiais, setMateriais] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+  const [lembrete, setLembrete] = useState('');
   
   // Estados de Controle
   const [isGerando, setIsGerando] = useState(false);
@@ -113,7 +117,7 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
         setEstrategiaInicio(dadosIA.estrategia_inicio || '');
         setEstrategiaDesenvolvimento(dadosIA.estrategia_desenvolvimento || '');
         setEstrategiaFim(dadosIA.estrategia_fim || '');
-        setMateriais(dadosIA.localizacao_materiais || '');
+        setObservacoes(dadosIA.localizacao_materiais || '');
         dispararToast('sucesso', 'Plano estruturado com sucesso pela IA!');
       } else {
         dispararToast('erro', 'Erro ao consultar a IA. Verifique as credenciais do backend.');
@@ -141,7 +145,8 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
       estrategia_inicio: estrategiaInicio, 
       estrategia_desenvolvimento: estrategiaDesenvolvimento, 
       estrategia_fim: estrategiaFim, 
-      localizacao_materiais: materiais
+      localizacao_materiais: observacoes,
+      lembrete: lembrete.trim()
     };
 
     setAulasPlanejadas([...aulasPlanejadas, novaAula]);
@@ -151,7 +156,8 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
     setEstrategiaInicio('');
     setEstrategiaDesenvolvimento('');
     setEstrategiaFim('');
-    setMateriais('');
+    setObservacoes('');
+    setLembrete('');
     dispararToast('sucesso', 'Aula adicionada à fila de envio.');
   };
 
@@ -415,18 +421,37 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
         </div>
       </div>
 
-      {/* Campo de Recursos / Materiais */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-          Recursos Didáticos / Localização de Materiais
-        </label>
-        <input 
-          type="text"
-          value={materiais}
-          onChange={(e) => setMateriais(e.target.value)}
-          placeholder="Ex: Sala de Informática, Folhas Sulfite, Projetor..."
-          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-        />
+      {/* Observações / Recursos e Lembrete */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Observações / Recursos */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+          <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+            <FileText className="w-4 h-4 text-blue-600" />
+            Observações / Recursos da Aula
+          </label>
+          <input 
+            type="text"
+            value={observacoes}
+            onChange={(e) => setObservacoes(e.target.value)}
+            placeholder="Ex: Aula prática, apostila p. 55-56, sala de vídeo..."
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+          />
+        </div>
+
+        {/* Lembrete da Aula / do Dia */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+          <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+            <Bell className="w-4 h-4 text-amber-500" />
+            Lembrete da Aula / do Dia (Opcional)
+          </label>
+          <input 
+            type="text"
+            value={lembrete}
+            onChange={(e) => setLembrete(e.target.value)}
+            placeholder="Ex: Estudar para a prova de História, trazer cartolina..."
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+          />
+        </div>
       </div>
 
       {/* Botão de Adicionar à Fila */}
@@ -457,6 +482,7 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
                 <tr>
                   <th className="px-4 py-3">Data / Semana</th>
                   <th className="px-4 py-3">Estratégia Central</th>
+                  <th className="px-4 py-3">Observações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -467,6 +493,12 @@ export default function CriarPlanejamento({ disciplinas, turmas, bncc }: Formula
                       <span className="text-[11px] font-normal text-slate-500">{aula.semana_referencia}</span>
                     </td>
                     <td className="px-4 py-3 line-clamp-2">{aula.estrategia_desenvolvimento}</td>
+                    <td className="px-4 py-3 text-xs text-slate-500">
+                      {aula.localizacao_materiais || '-'}
+                      {aula.lembrete && (
+                        <div className="text-amber-600 font-medium mt-0.5">📌 {aula.lembrete}</div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

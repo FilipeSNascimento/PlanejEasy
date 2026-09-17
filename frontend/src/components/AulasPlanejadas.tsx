@@ -22,7 +22,9 @@ import {
   ChevronDown,
   ChevronRight,
   Filter,
-  RotateCcw
+  RotateCcw,
+  Bell,
+  FileText
 } from 'lucide-react';
 
 interface Turma { id: number; nome: string; }
@@ -30,7 +32,7 @@ interface Disciplina { id: number; nome: string; }
 
 interface AulaPlanejada {
   id: number;
-  professor_id: number;
+  professor_id: number | string;
   data_aula: string;
   semana_referencia: string;
   turma_id: number;
@@ -43,6 +45,7 @@ interface AulaPlanejada {
   estrategia_desenvolvimento: string;
   estrategia_fim?: string;
   localizacao_materiais?: string;
+  lembrete?: string;
 }
 
 export default function AulasPlanejadas() {
@@ -179,7 +182,8 @@ export default function AulasPlanejadas() {
         estrategia_inicio: aulaParaClonar.estrategia_inicio || '',
         estrategia_desenvolvimento: aulaParaClonar.estrategia_desenvolvimento || '',
         estrategia_fim: aulaParaClonar.estrategia_fim || '',
-        localizacao_materiais: aulaParaClonar.localizacao_materiais || ''
+        localizacao_materiais: aulaParaClonar.localizacao_materiais || '',
+        lembrete: aulaParaClonar.lembrete || ''
       }];
 
       const res = await apiFetch('/planos/lote', {
@@ -256,7 +260,6 @@ export default function AulasPlanejadas() {
 
       if (!res.ok) throw new Error('Falha na geração do arquivo');
 
-      // Cria download via blob para preservar a autorização JWT
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -286,12 +289,14 @@ export default function AulasPlanejadas() {
     const semana = aula.semana_referencia?.toLowerCase() || '';
     const turma = aula.turmas?.nome?.toLowerCase() || '';
     const disciplina = aula.disciplinas?.nome?.toLowerCase() || '';
+    const lembreteTxt = aula.lembrete?.toLowerCase() || '';
 
     const matchTexto = !filtroTexto || (
       estrategia.includes(termo) ||
       semana.includes(termo) ||
       turma.includes(termo) ||
-      disciplina.includes(termo)
+      disciplina.includes(termo) ||
+      lembreteTxt.includes(termo)
     );
 
     const matchDisciplina = !filtroDisciplina || String(aula.disciplina_id) === filtroDisciplina;
@@ -367,7 +372,7 @@ export default function AulasPlanejadas() {
               type="text"
               value={filtroTexto}
               onChange={(e) => setFiltroTexto(e.target.value)}
-              placeholder="Pesquisar por conteúdo, turma, código..."
+              placeholder="Pesquisar por conteúdo, turma, código, lembrete..."
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
             />
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
@@ -487,7 +492,7 @@ export default function AulasPlanejadas() {
                   </div>
                 </div>
 
-                {/* Conteúdo da Turma (se aberta) */}
+                {/* Conteúdo da Turma */}
                 {turmaAberta && (
                   <div className="space-y-6 pt-2 border-t border-slate-100">
                     {Object.entries(semanas).map(([semana, listaAulas]) => {
@@ -512,7 +517,7 @@ export default function AulasPlanejadas() {
                             </div>
 
                             <button 
-                              type="button"
+                              type="button" 
                               className="text-slate-400 group-hover:text-slate-600 p-1 rounded-md"
                             >
                               {semanaAberta ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -566,10 +571,28 @@ export default function AulasPlanejadas() {
                                       {/* Desenvolvimento */}
                                       <div className="space-y-1.5 mb-4">
                                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Desenvolvimento</p>
-                                        <p className="text-sm text-slate-700 line-clamp-4 leading-relaxed font-normal">
+                                        <p className="text-sm text-slate-700 line-clamp-3 leading-relaxed font-normal">
                                           {aula.estrategia_desenvolvimento}
                                         </p>
                                       </div>
+
+                                      {/* Observações / Recursos e Lembrete */}
+                                      {(aula.localizacao_materiais || aula.lembrete) && (
+                                        <div className="space-y-1.5 mb-4 p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                                          {aula.localizacao_materiais && (
+                                            <div className="text-slate-600 flex items-start gap-1.5">
+                                              <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+                                              <span className="line-clamp-2">{aula.localizacao_materiais}</span>
+                                            </div>
+                                          )}
+                                          {aula.lembrete && (
+                                            <div className="text-amber-700 font-medium flex items-start gap-1.5">
+                                              <Bell className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                                              <span className="line-clamp-2">{aula.lembrete}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
 
                                     {/* Rodapé e Ações */}
@@ -621,7 +644,7 @@ export default function AulasPlanejadas() {
         </div>
       )}
 
-      {/* Modal de Clonagem Transversal entre Turmas */}
+      {/* Modal de Clonagem Transversal */}
       {aulaParaClonar && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
@@ -703,7 +726,7 @@ export default function AulasPlanejadas() {
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div>
                 <h3 className="font-bold text-slate-900 text-lg">Editar Planejamento</h3>
-                <p className="text-xs text-slate-500">Modifique a turma, ordem e conteúdo didático.</p>
+                <p className="text-xs text-slate-500">Modifique turma, ordem, conteúdo didático e lembretes.</p>
               </div>
               <button 
                 onClick={() => setAulaEditando(null)}
@@ -748,16 +771,16 @@ export default function AulasPlanejadas() {
                     Ordem
                   </label>
                   <select
-                    value={aulaEditando.ordem_aula || '1ª'}
+                    value={aulaEditando.ordem_aula || '1ª Aula'}
                     onChange={(e) => setAulaEditando({ ...aulaEditando, ordem_aula: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-blue-500 focus:bg-white"
                   >
-                    <option value="1ª">1ª Aula</option>
-                    <option value="2ª">2ª Aula</option>
-                    <option value="3ª">3ª Aula</option>
-                    <option value="4ª">4ª Aula</option>
-                    <option value="5ª">5ª Aula</option>
-                    <option value="6ª">6ª Aula</option>
+                    <option value="1ª Aula">1ª Aula</option>
+                    <option value="2ª Aula">2ª Aula</option>
+                    <option value="3ª Aula">3ª Aula</option>
+                    <option value="4ª Aula">4ª Aula</option>
+                    <option value="5ª Aula">5ª Aula</option>
+                    <option value="6ª Aula">6ª Aula</option>
                   </select>
                 </div>
               </div>
@@ -799,16 +822,31 @@ export default function AulasPlanejadas() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                  Recursos / Materiais
-                </label>
-                <input
-                  type="text"
-                  value={aulaEditando.localizacao_materiais || ''}
-                  onChange={(e) => setAulaEditando({ ...aulaEditando, localizacao_materiais: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 focus:bg-white"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Observações / Recursos
+                  </label>
+                  <input
+                    type="text"
+                    value={aulaEditando.localizacao_materiais || ''}
+                    onChange={(e) => setAulaEditando({ ...aulaEditando, localizacao_materiais: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-amber-600 mb-1">
+                    Lembrete da Aula
+                  </label>
+                  <input
+                    type="text"
+                    value={aulaEditando.lembrete || ''}
+                    onChange={(e) => setAulaEditando({ ...aulaEditando, lembrete: e.target.value })}
+                    placeholder="Ex: Trazer caderno de desenho..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-500 focus:bg-white"
+                  />
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">

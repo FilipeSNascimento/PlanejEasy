@@ -64,7 +64,6 @@ routes.get('/turmas', authMiddleware, async (req: AuthRequest, res) => {
 
     if (error) {
       console.error('Erro em turmas:', error);
-
       const fallback = await supabase.from('turmas').select('*').order('nome');
       return res.json(fallback.data || []);
     }
@@ -116,13 +115,11 @@ routes.get('/professor/me', authMiddleware, async (req: AuthRequest, res) => {
 
     if (error) return res.status(400).json({ erro: error.message });
 
-    // Busca as turmas associadas a este professor
     const { data: turmas } = await supabase
       .from('turmas')
       .select('*')
       .eq('professor_id', req.userId);
 
-    // Busca a lista de disciplinas disponíveis
     const { data: disciplinas } = await supabase
       .from('disciplinas')
       .select('*')
@@ -144,14 +141,12 @@ routes.put('/professor/me', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { nome, email, turmas, disciplinasDisponiveis } = req.body;
 
-    // Atualiza/Insere o perfil do professor logado
     await supabase.from('professores').upsert({
       id: req.userId,
       nome,
       email
     });
 
-    // Sincroniza turmas
     if (turmas && Array.isArray(turmas)) {
       const turmasComId = turmas.filter((t: any) => t.id).map((t: any) => t.id);
 
@@ -174,7 +169,6 @@ routes.put('/professor/me', authMiddleware, async (req: AuthRequest, res) => {
       }
     }
 
-    // Sincroniza disciplinas
     if (disciplinasDisponiveis && Array.isArray(disciplinasDisponiveis)) {
       const discComId = disciplinasDisponiveis.filter((d: any) => d.id).map((d: any) => d.id);
 
@@ -266,10 +260,13 @@ routes.put('/planos/:id', authMiddleware, async (req: AuthRequest, res) => {
       data_aula,
       ordem_aula,
       turma_id,
+      disciplina_id,
+      objeto_conhecimento,
       estrategia_inicio,
       estrategia_desenvolvimento,
       estrategia_fim,
-      localizacao_materiais
+      localizacao_materiais,
+      lembrete
     } = req.body;
 
     const { data, error } = await supabase
@@ -278,10 +275,13 @@ routes.put('/planos/:id', authMiddleware, async (req: AuthRequest, res) => {
         data_aula,
         ordem_aula,
         turma_id: Number(turma_id),
+        disciplina_id: disciplina_id ? Number(disciplina_id) : undefined,
+        objeto_conhecimento,
         estrategia_inicio,
         estrategia_desenvolvimento,
         estrategia_fim,
-        localizacao_materiais
+        localizacao_materiais,
+        lembrete
       })
       .eq('id', id)
       .eq('professor_id', req.userId)
@@ -322,7 +322,7 @@ routes.post('/ia/gerar-plano', authMiddleware, async (req: AuthRequest, res) => 
   try {
     const { resumo, disciplina, turma } = req.body;
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `
       Atue como um professor especialista em didática e editor de texto pedagógico.
@@ -369,7 +369,7 @@ routes.get('/planos/exportar-lote', authMiddleware, async (req: AuthRequest, res
     const idsString = req.query.ids as string;
     if (!idsString) return res.status(400).json({ erro: 'Nenhum ID fornecido.' });
 
-    const ids = idsString.split(',').map(id => Number(id));
+    const ids = idsString.split(',').map(id => id.trim());
 
     // Busca apenas as aulas pertencentes ao professor autenticado
     const { data: planos, error } = await supabase
@@ -425,6 +425,7 @@ routes.get('/planos/exportar-lote', authMiddleware, async (req: AuthRequest, res
 
     let linhaAtual = 1;
 
+    // Cabeçalho institucional superior
     worksheet.getCell(`A${linhaAtual}`).value = 'Professor(a)';
     worksheet.mergeCells(`A${linhaAtual}:B${linhaAtual}`);
 
@@ -465,6 +466,7 @@ routes.get('/planos/exportar-lote', authMiddleware, async (req: AuthRequest, res
         textoDia = `${diaSemana} - ${dataFmt}`;
       }
 
+      // Faixa do dia
       worksheet.getCell(`A${linhaAtual}`).value = textoDia;
       worksheet.mergeCells(`A${linhaAtual}:E${linhaAtual}`);
       worksheet.getCell(`A${linhaAtual}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
@@ -472,11 +474,12 @@ routes.get('/planos/exportar-lote', authMiddleware, async (req: AuthRequest, res
       worksheet.getCell(`A${linhaAtual}`).alignment = { horizontal: 'center', vertical: 'middle' };
       linhaAtual++;
 
+      // Títulos das colunas
       worksheet.getCell(`A${linhaAtual}`).value = 'Aula / Turma\nComponente Curricular';
       worksheet.mergeCells(`A${linhaAtual}:B${linhaAtual}`);
       worksheet.getCell(`C${linhaAtual}`).value = 'Objeto do Conhecimento\nHabilidade';
       worksheet.getCell(`D${linhaAtual}`).value = 'Desenvolvimento / Estratégia';
-      worksheet.getCell(`E${linhaAtual}`).value = 'Localização / Recursos';
+      worksheet.getCell(`E${linhaAtual}`).value = 'Observações';
 
       [`A${linhaAtual}`, `C${linhaAtual}`, `D${linhaAtual}`, `E${linhaAtual}`].forEach(cel => {
         const c = worksheet.getCell(cel);
@@ -486,6 +489,7 @@ routes.get('/planos/exportar-lote', authMiddleware, async (req: AuthRequest, res
       });
       linhaAtual++;
 
+      // Linhas de aula (1ª a 6ª)
       posicoesAulas.forEach(pos => {
         const plano = listaAulasDoDia.find(p => (p.ordem_aula || '').startsWith(pos));
 
@@ -524,18 +528,38 @@ routes.get('/planos/exportar-lote', authMiddleware, async (req: AuthRequest, res
         linhaAtual++;
       });
 
+      // Lembrete consolidado no rodapé da tabela do dia
+      const lembretes = listaAulasDoDia
+        .map(a => a.lembrete?.trim())
+        .filter((l): l is string => Boolean(l));
+
+      const lembretesUnicos = Array.from(new Set(lembretes));
+
+      if (lembretesUnicos.length > 0) {
+        worksheet.getCell(`A${linhaAtual}`).value = `Lembrete: ${lembretesUnicos.join(' • ')}`;
+        worksheet.mergeCells(`A${linhaAtual}:E${linhaAtual}`);
+        
+        const celLembrete = worksheet.getCell(`A${linhaAtual}`);
+        celLembrete.font = { italic: true, bold: true, size: 9.5, color: { argb: 'FF92400E' } };
+        celLembrete.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
+        celLembrete.alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true };
+        
+        linhaAtual++;
+      }
+
       if (indexDia < dias.length - 1) {
         linhaAtual += 2;
       }
     });
 
+    // Bordas de todas as células preenchidas
     worksheet.eachRow({ includeEmpty: false }, (row) => {
       row.eachCell({ includeEmpty: true }, (cell) => {
         cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' }
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
         };
       });
     });

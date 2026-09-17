@@ -49,26 +49,29 @@ Plataforma web desenvolvida para otimizar o fluxo de trabalho pedagógico de edu
 - [x] **Hierarquia Visual Multinível:** Agrupamento de aulas por Turma e Semana de referência com sanfonas (*accordions* colapsáveis iniciando recolhidos por padrão).
 - [x] **Clonagem Transversal entre Turmas:** Duplicação direta e flexível de planos com suporte a seleção da turma de destino no momento da cópia.
 - [x] **Busca e Filtros Combinados em Tempo Real:** Filtragem dinâmica simultânea por busca textual ampla, seleção por componente curricular (disciplina) e intervalo de datas (De / Até).
-- [x] **Exportação Institucional por Grade Diária (ExcelJS):** Geração de planilhas formatadas com tabelas segmentadas por dia, cabeçalho de professor automatizado e grade fixa de 1ª a 6ª aula (com suporte a lacunas de horários vagos e validação de posse do plano).
+- [x] **Exportação Institucional por Grade Diária (ExcelJS):** Geração de planilhas formatadas com tabelas segmentadas por dia, cabeçalho de professor automatizado, grade fixa de 1ª a 6ª aula, coluna de Observações e consolidação inteligente de lembretes diários.
 - [x] **Gestão de Perfil, Turmas e Disciplinas:** Painel interativo com consumo autenticado (`apiFetch` / `/professor/me`) para sincronização dinâmica dos dados do professor logado e das turmas ativas.
 - [x] **Navegação & Encerramento de Sessão:** Sidebar com fluxo de logout integrado (`supabase.auth.signOut()`) e transições seguras de interface.
+- [x] **Modelo Didático Flexível:** Suporte validado para rotina multidisciplinar de Professor Regente e grade de horários de Professor Aulista dentro da mesma arquitetura.
+- [x] **Ajuste Fino de Layout & Campos da Grade:** Inclusão dos campos de Lembrete diário e Observações/Recursos nos formulários, cards, modal de edição e consolidação na planilha Excel.
 
 ---
 
-### 🚧 Em Andamento / Próximos Passos
+### 🚧 Em Andamento / Próximos Passos (Pré-Deploy)
 
-- [ ] **Modelos Didáticos Segmentados:** Ajuste de fluxos para Professor Regente (rotina contínua diária) vs. Professor Aulista (visão por grade horária e replicação paralela).
+- [ ] **Revisão de Responsividade Mobile:** Validação de telas pequenas (modais, inputs de formulário e sanfonas).
+- [ ] **Configuração de Ambiente & Build de Produção:** Teste de compilação estática (`npm run build`) no Vite, build do TypeScript no backend e mapeamento correto de CORS.
+- [ ] **Deploy da Aplicação:** Publicação do Frontend (Vercel) e Backend (Render/Railway) conectados ao Supabase em produção.
+- [ ] **Validação E2E em Produção:** Teste do fluxo completo de uso com professor real no ambiente publicado.
 
 ---
 
-### 💡 Backlog de Melhorias Futuras
+### 💡 Backlog de Melhorias Futuras (Pós-Lançamento)
 
 - [ ] **Base Completa da BNCC & Indicador de Cobertura:** Carga integral dos códigos curriculares com medidor visual de habilidades trabalhadas por bimestre.
 - [ ] **Exportação Direta em PDF:** Geração de relatórios visuais formatados para impressão e download em PDF direto pelo navegador.
 - [ ] **Banco de Aulas Favoritas:** Sistema de marcação de planos modelo para reaproveitamento rápido em semestres futuros.
 - [ ] **Modo Escuro (Dark Mode):** Alternância de contraste na interface com foco em conforto visual para planejamento noturno.
-
----
 
 ## 💻 Como Rodar o Projeto Localmente
 
