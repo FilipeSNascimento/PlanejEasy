@@ -54,13 +54,12 @@ Plataforma web desenvolvida para otimizar o fluxo de trabalho pedagógico de edu
 - [x] **Navegação & Encerramento de Sessão:** Sidebar com fluxo de logout integrado (`supabase.auth.signOut()`) e transições seguras de interface.
 - [x] **Modelo Didático Flexível:** Suporte validado para rotina multidisciplinar de Professor Regente e grade de horários de Professor Aulista dentro da mesma arquitetura.
 - [x] **Ajuste Fino de Layout & Campos da Grade:** Inclusão dos campos de Lembrete diário e Observações/Recursos nos formulários, cards, modal de edição e consolidação na planilha Excel.
-
+- [x] **Configuração de Ambiente & Build de Produção:** Scripts de compilação estática (`npm run build`) validados no Vite, build do TypeScript no backend verificado e CORS preparado para produção.
 ---
 
 ### 🚧 Em Andamento / Próximos Passos (Pré-Deploy)
 
 - [ ] **Revisão de Responsividade Mobile:** Validação de telas pequenas (modais, inputs de formulário e sanfonas).
-- [ ] **Configuração de Ambiente & Build de Produção:** Teste de compilação estática (`npm run build`) no Vite, build do TypeScript no backend e mapeamento correto de CORS.
 - [ ] **Deploy da Aplicação:** Publicação do Frontend (Vercel) e Backend (Render/Railway) conectados ao Supabase em produção.
 - [ ] **Validação E2E em Produção:** Teste do fluxo completo de uso com professor real no ambiente publicado.
 
