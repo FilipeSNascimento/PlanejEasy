@@ -322,7 +322,7 @@ routes.post('/ia/gerar-plano', authMiddleware, async (req: AuthRequest, res) => 
   try {
     const { resumo, disciplina, turma } = req.body;
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
 
     const prompt = `
       Atue como um professor especialista em didática e editor de texto pedagógico.
